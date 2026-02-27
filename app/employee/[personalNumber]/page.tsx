@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -42,8 +43,13 @@ export default function EmployeeProfilePage() {
     const oopp = getOoppRecordsForEmployee(personalNumber);
     const iluo = getIluoRecordsForEmployee(personalNumber);
 
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     function formatDate(d: string | null): string {
-        if (!d) return "—";
+        if (!d || !isMounted) return "—";
         return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
     }
 

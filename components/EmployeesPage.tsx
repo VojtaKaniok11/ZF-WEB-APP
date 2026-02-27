@@ -60,22 +60,35 @@ export default function EmployeesPage() {
     }, [fetchEmployees]);
 
     /* ---- Filter actions ---- */
-    function applyFilters() {
+    function applyFilters(newSearch?: string, newDept?: string, newStatus?: string) {
         const params = new URLSearchParams();
-        if (search) params.set("search", search);
-        if (department) params.set("dept", department);
-        if (status) params.set("status", status);
+        const s = newSearch !== undefined ? newSearch : search;
+        const d = newDept !== undefined ? newDept : department;
+        const st = newStatus !== undefined ? newStatus : status;
+
+        if (s) params.set("search", s);
+        if (d) params.set("dept", d);
+        if (st) params.set("status", st);
 
         const qs = params.toString();
-        router.push(qs ? `/?${qs}` : "/", { scroll: false });
-        fetchEmployees();
+        const newUrl = qs ? `/?${qs}` : "/";
+
+        // Only push if the URL actually changed to avoid redundant history entries and loops
+        if (window.location.search !== (qs ? `?${qs}` : "")) {
+            router.push(newUrl, { scroll: false });
+        }
     }
 
-    // Auto-apply on dropdown change
-    useEffect(() => {
-        applyFilters();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [department, status]);
+    // Direct handlers for filters
+    const handleSearchChange = (val: string) => setSearch(val);
+    const handleDepartmentChange = (val: string) => {
+        setDepartment(val);
+        applyFilters(search, val, status);
+    };
+    const handleStatusChange = (val: string) => {
+        setStatus(val);
+        applyFilters(search, department, val);
+    };
 
     /* ---- Save new employee ---- */
     async function handleSaveEmployee(data: NewEmployeePayload) {
@@ -120,10 +133,10 @@ export default function EmployeesPage() {
                     search={search}
                     department={department}
                     status={status}
-                    onSearchChange={setSearch}
-                    onDepartmentChange={setDepartment}
-                    onStatusChange={setStatus}
-                    onSubmit={applyFilters}
+                    onSearchChange={handleSearchChange}
+                    onDepartmentChange={handleDepartmentChange}
+                    onStatusChange={handleStatusChange}
+                    onSubmit={() => applyFilters()}
                 />
 
                 {/* Content area */}

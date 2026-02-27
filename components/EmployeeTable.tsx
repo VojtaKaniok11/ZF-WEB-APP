@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Eye } from "lucide-react";
 import { Employee } from "@/types/employee";
 import StatusBadge from "./StatusBadge";
@@ -13,8 +14,13 @@ export default function EmployeeTable({
     employees,
     onViewDetail,
 }: EmployeeTableProps) {
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     function formatDate(dateStr: string | null): string {
-        if (!dateStr) return "—";
+        if (!dateStr || !isMounted) return "—";
         const d = new Date(dateStr);
         return d.toLocaleDateString("cs-CZ", {
             day: "2-digit",
