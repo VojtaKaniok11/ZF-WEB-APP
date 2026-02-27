@@ -2,18 +2,62 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { getTrainingRecordsForEmployee } from "@/lib/mock-trainings";
-import { getEmployeeDetail } from "@/lib/mock-data";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import ExpirationBadge from "@/components/ExpirationBadge";
+import type { EmployeeDetail } from "@/types/employee";
+import type { EmployeeTrainingRecord } from "@/types/training";
 
 export default function TrainingDetailPage() {
     const params = useParams();
     const personalNumber = params.personalNumber as string;
-    const employee = getEmployeeDetail(personalNumber);
-    const records = getTrainingRecordsForEmployee(personalNumber);
 
-    if (!employee) {
+    const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
+    const [records, setRecords] = useState<EmployeeTrainingRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [notFound, setNotFound] = useState(false);
+
+    useEffect(() => {
+        if (!personalNumber) return;
+        const pn = encodeURIComponent(personalNumber);
+
+        async function load() {
+            setIsLoading(true);
+            try {
+                const [empRes, trnRes] = await Promise.all([
+                    fetch(`/api/employees/${pn}`),
+                    fetch(`/api/trainings/${pn}`),
+                ]);
+                const empJson = await empRes.json();
+                if (!empJson.success) { setNotFound(true); return; }
+                setEmployee(empJson.data);
+
+                const trnJson = await trnRes.json();
+                if (trnJson.success) setRecords(trnJson.data);
+            } catch {
+                setNotFound(true);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        load();
+    }, [personalNumber]);
+
+    function formatDate(d: string | null): string {
+        if (!d) return "—";
+        return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-[60vh] items-center justify-center">
+                <Loader2 size={32} className="animate-spin text-blue-500" />
+            </div>
+        );
+    }
+
+    if (notFound || !employee) {
         return (
             <div className="mx-auto max-w-5xl px-4 py-12 text-center">
                 <p className="text-gray-500">Zaměstnanec nenalezen.</p>
@@ -22,11 +66,6 @@ export default function TrainingDetailPage() {
                 </Link>
             </div>
         );
-    }
-
-    function formatDate(d: string | null): string {
-        if (!d) return "—";
-        return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
     }
 
     return (
@@ -42,14 +81,14 @@ export default function TrainingDetailPage() {
 
             {/* Employee header */}
             <div className="mb-8 flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-lg font-bold text-blue-700">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-2xl font-bold text-blue-700">
                     {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">
                         {employee.firstName} {employee.lastName}
                     </h1>
-                    <p className="text-sm text-gray-500">
+                    <p className="mt-0.5 text-sm text-gray-500">
                         {employee.personalNumber} · {employee.department} · {employee.position}
                     </p>
                 </div>
@@ -59,13 +98,12 @@ export default function TrainingDetailPage() {
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-200 px-5 py-4" style={{ backgroundColor: "#0054A6" }}>
                     <h2 className="text-base font-semibold text-white">
-                        📋 Přehled školení ({records.length})
+                        Přehled školení ({records.length})
                     </h2>
                 </div>
 
                 {records.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
-                        <div className="mb-3 text-4xl">📚</div>
                         <p className="text-sm text-gray-400">Žádné záznamy o školení.</p>
                     </div>
                 ) : (
@@ -73,25 +111,25 @@ export default function TrainingDetailPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50/80">
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Školení</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Kategorie</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Datum</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Expirace</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Školitel</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Školení</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Kategorie</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Datum</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Expirace</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Školitel</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {records.map((r, idx) => (
                                     <tr key={idx} className="transition-colors hover:bg-blue-50/40">
-                                        <td className="px-4 py-3 font-medium text-gray-900">{r.trainingName}</td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-5 py-3 font-medium text-gray-900">{r.trainingName}</td>
+                                        <td className="px-5 py-3">
                                             <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">{r.category}</span>
                                         </td>
-                                        <td className="px-4 py-3 tabular-nums text-gray-600">{formatDate(r.completedDate)}</td>
-                                        <td className="px-4 py-3 tabular-nums text-gray-600">{formatDate(r.expirationDate)}</td>
-                                        <td className="px-4 py-3 text-gray-600">{r.trainerName}</td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.completedDate)}</td>
+                                        <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.expirationDate)}</td>
+                                        <td className="px-5 py-3 text-gray-600">{r.trainerName}</td>
+                                        <td className="px-5 py-3">
                                             <ExpirationBadge status={r.status} />
                                         </td>
                                     </tr>

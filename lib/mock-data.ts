@@ -1,5 +1,9 @@
 import { Employee, EmployeeDetail } from "@/types/employee";
 import { getDepartmentShortCode } from "./constants";
+import { generateInitialMedicalForEmployee } from "./mock-medical";
+import { generateInitialTrainingsForEmployee } from "./mock-trainings";
+import { generateInitialOoppForEmployee } from "./mock-oopp";
+import { generateInitialIluoForEmployee } from "./mock-iluo";
 
 /* ------------------------------------------------------------------ */
 /*  Helper functions (ported from C# helpers in original Razor code)  */
@@ -181,13 +185,20 @@ export function addEmployee(data: {
         isActive: data.isActive,
         userName: `${data.firstName.toLowerCase().charAt(0)}${data.lastName.toLowerCase()}`,
         email: `${data.firstName.toLowerCase()}.${data.lastName.toLowerCase()}@zf.com`,
-        phone: "",
-        mobile: "",
-        position: "Nový zaměstnanec",
+        phone: "+420 555 111 222",
+        mobile: "+420 777 111 222",
+        position: data.department === "Montáž" ? "Operátor montáže" : "Nový zaměstnanec",
         level: "L5",
-        managerId: null,
+        managerId: 1,
     };
 
     RAW_USERS.push(newUser);
+
+    // Auto-generate records in other modules (synchronous – same module instance)
+    generateInitialMedicalForEmployee(data.personalNumber, data.hiringDate);
+    generateInitialTrainingsForEmployee(data.personalNumber, data.hiringDate);
+    generateInitialOoppForEmployee(data.personalNumber, data.department, data.hiringDate);
+    generateInitialIluoForEmployee(data.personalNumber, data.department);
+
     return toEmployee(newUser);
 }

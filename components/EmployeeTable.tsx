@@ -32,31 +32,31 @@ export default function EmployeeTable({
     return (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-[0.9rem]">
                     <thead>
                         <tr className="border-b border-gray-200 bg-gray-50/80">
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Osobní číslo
                             </th>
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Jméno
                             </th>
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Příjmení
                             </th>
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Oddělení
                             </th>
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Středisko
                             </th>
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Nástup
                             </th>
-                            <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Stav
                             </th>
-                            <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                            <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Akce
                             </th>
                         </tr>
@@ -67,35 +67,35 @@ export default function EmployeeTable({
                                 key={emp.id}
                                 className="transition-colors hover:bg-blue-50/40"
                             >
-                                <td className="whitespace-nowrap px-4 py-3">
+                                <td className="whitespace-nowrap px-5 py-3.5">
                                     <code className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono font-semibold text-blue-700">
                                         {emp.personalNumber}
                                     </code>
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-700">
                                     {emp.firstName}
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3 font-semibold text-gray-900">
+                                <td className="whitespace-nowrap px-5 py-3.5 font-semibold text-gray-900">
                                     {emp.lastName}
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-gray-600">
+                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-600">
                                     {emp.department}
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-gray-600">
+                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-600">
                                     {emp.costCenter}
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-gray-500 tabular-nums">
+                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-500 tabular-nums">
                                     {formatDate(emp.hiringDate)}
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3">
+                                <td className="whitespace-nowrap px-5 py-3.5">
                                     <StatusBadge isActive={emp.isActive} />
                                 </td>
-                                <td className="whitespace-nowrap px-4 py-3 text-right">
+                                <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                     <button
                                         onClick={() => onViewDetail(emp.personalNumber)}
-                                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-blue-600 transition-all hover:bg-blue-50 hover:text-blue-700 active:scale-95"
+                                        className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-blue-600 transition-all hover:bg-blue-50 hover:text-blue-700 active:scale-95"
                                     >
-                                        <Eye size={14} />
+                                        <Eye size={15} />
                                         Detail
                                     </button>
                                 </td>

@@ -1,15 +1,11 @@
 import { getEmployees } from "@/lib/mock-data";
-import { getPersonalNumbersWithOopp } from "@/lib/mock-oopp";
 import PersonList from "@/components/PersonList";
 
 export const metadata = { title: "OOPP | ZF HR Portal" };
 
 export default function OoppPage() {
-    const relevantPNs = getPersonalNumbersWithOopp();
-    const allEmployees = getEmployees();
-    const employees = allEmployees.filter((e) =>
-        relevantPNs.includes(e.personalNumber)
-    );
+    const employees = getEmployees();
+
 
     return (
         <PersonList

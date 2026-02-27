@@ -163,3 +163,31 @@ export function getPersonalNumbersWithOopp(): string[] {
 export function getOoppItems(): OoppItem[] {
     return OOPP_ITEMS;
 }
+
+export function generateInitialOoppForEmployee(personalNumber: string, department: string, hiringDate: string | null) {
+    const hiringDateObj = hiringDate ? new Date(hiringDate) : new Date();
+    const issueDate = hiringDateObj.toISOString().split("T")[0];
+
+    // Give basic items: shoes and goggles
+    OOPP_ISSUE_RECORDS.push({
+        id: `ISS-NEW-1-${personalNumber}`,
+        ooppItemId: "OOPP-001",
+        employeePersonalNumber: personalNumber,
+        issueDate,
+        nextEntitlementDate: new Date(hiringDateObj.setFullYear(hiringDateObj.getFullYear() + 1)).toISOString().split("T")[0],
+        quantity: 1,
+        size: "42",
+        notes: "Vstupní výdej"
+    });
+
+    OOPP_ISSUE_RECORDS.push({
+        id: `ISS-NEW-2-${personalNumber}`,
+        ooppItemId: "OOPP-004",
+        employeePersonalNumber: personalNumber,
+        issueDate,
+        nextEntitlementDate: new Date(hiringDateObj.setFullYear(hiringDateObj.getFullYear() + 1)).toISOString().split("T")[0],
+        quantity: 1,
+        size: null,
+        notes: "Vstupní výdej"
+    });
+}

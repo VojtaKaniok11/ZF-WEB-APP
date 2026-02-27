@@ -34,23 +34,23 @@ export default function MedicalDetailPage() {
             </Link>
 
             <div className="mb-8 flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-100 to-rose-200 text-lg font-bold text-rose-700">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-rose-100 to-rose-200 text-2xl font-bold text-rose-700">
                     {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">{employee.firstName} {employee.lastName}</h1>
-                    <p className="text-sm text-gray-500">{employee.personalNumber} · {employee.department} · {employee.position}</p>
+                    <p className="mt-0.5 text-sm text-gray-500">{employee.personalNumber} · {employee.department} · {employee.position}</p>
                 </div>
             </div>
 
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-200 px-5 py-4" style={{ backgroundColor: "#0054A6" }}>
-                    <h2 className="text-base font-semibold text-white">🏥 Lékařské prohlídky ({records.length})</h2>
+                    <h2 className="text-base font-semibold text-white">Lékařské prohlídky ({records.length})</h2>
                 </div>
 
                 {records.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
-                        <div className="mb-3 text-4xl">🏥</div>
+
                         <p className="text-sm text-gray-400">Žádné záznamy o prohlídkách.</p>
                     </div>
                 ) : (
@@ -58,34 +58,34 @@ export default function MedicalDetailPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50/80">
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Prohlídka</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Kategorie</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Datum</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Další prohlídka</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Lékař</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Výsledek</th>
-                                    <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Prohlídka</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Kategorie</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Datum</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Další prohlídka</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Lékař</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Výsledek</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {records.map((r, idx) => (
                                     <tr key={idx} className="transition-colors hover:bg-blue-50/40">
-                                        <td className="px-4 py-3 font-medium text-gray-900">{r.examTypeName}</td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-5 py-3 font-medium text-gray-900">{r.examTypeName}</td>
+                                        <td className="px-5 py-3">
                                             <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">{r.category}</span>
                                         </td>
-                                        <td className="px-4 py-3 tabular-nums text-gray-600">{formatDate(r.examDate)}</td>
-                                        <td className="px-4 py-3 tabular-nums text-gray-600">{formatDate(r.nextExamDate)}</td>
-                                        <td className="px-4 py-3 text-gray-600">{r.doctorName}</td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.examDate)}</td>
+                                        <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.nextExamDate)}</td>
+                                        <td className="px-5 py-3 text-gray-600">{r.doctorName}</td>
+                                        <td className="px-5 py-3">
                                             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${r.result === "Způsobilý" ? "bg-emerald-50 text-emerald-700" :
-                                                    r.result === "Způsobilý s omezením" ? "bg-amber-50 text-amber-700" :
-                                                        "bg-red-50 text-red-700"
+                                                r.result === "Způsobilý s omezením" ? "bg-amber-50 text-amber-700" :
+                                                    "bg-red-50 text-red-700"
                                                 }`}>
                                                 {r.result}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-5 py-3">
                                             <ExpirationBadge status={r.status} />
                                         </td>
                                     </tr>

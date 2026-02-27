@@ -233,7 +233,11 @@ export function getTrainingRecordsForEmployee(personalNumber: string): EmployeeT
         const training = TRAININGS.find((t) => t.id === session.trainingId);
         if (!training) continue;
 
-        const { expirationDate, status } = computeStatus(session.sessionDate, training.validityMonths);
+        // Pokud jde o manuálně přidanou session, použijeme přepis místo výpočtu
+        const override = _manualSessionOverrides[session.id];
+        const { expirationDate, status } = override
+            ? { expirationDate: override.expirationDate, status: override.status as EmployeeTrainingRecord["status"] }
+            : computeStatus(session.sessionDate, training.validityMonths);
 
         records.push({
             trainingId: training.id,
@@ -270,3 +274,74 @@ export function getPersonalNumbersWithTrainings(): string[] {
     }
     return Array.from(setPN);
 }
+
+export function generateInitialTrainingsForEmployee(personalNumber: string, hiringDate: string | null) {
+    const hiringDateObj = hiringDate ? new Date(hiringDate) : new Date();
+    const sessionDate = hiringDateObj.toISOString().split("T")[0];
+
+    TRAINING_SESSIONS.push({
+        id: `TSESS-NEW-${personalNumber}`,
+        trainingId: "TRN-001",
+        sessionDate,
+        trainerName: "Ing. Karel Novotný",
+        location: "Školící místnost A",
+        attendeePersonalNumbers: [personalNumber],
+        notes: "Vstupní školení - automaticky generováno",
+    });
+}
+
+/**
+ * Přidá nové školení (session) pro vybrané zaměstnance
+ * Ukládá i manuálně zadaný stav (platné/neplatné)
+ */
+export interface NewTrainingSessionInput {
+    trainingName: string;
+    category: string;
+    completedDate: string;
+    expirationDate: string;
+    trainerName: string;
+    status: "valid" | "expired";
+    attendeePersonalNumbers: string[];
+}
+
+export function addTrainingSession(input: NewTrainingSessionInput): void {
+    const newId = `TSESS-MANUAL-${Date.now()}`;
+
+    // Přidáme nebo najdeme existující training v katalogu
+    let training = TRAININGS.find(
+        (t) => t.name.toLowerCase() === input.trainingName.toLowerCase() && t.category === input.category
+    );
+
+    if (!training) {
+        const newTrainingId = `TRN-MANUAL-${Date.now()}`;
+        const newTraining: Training = {
+            id: newTrainingId,
+            name: input.trainingName,
+            description: "",
+            validityMonths: 0,
+            category: input.category as Training["category"],
+            isMandatory: false,
+        };
+        TRAININGS.push(newTraining);
+        training = newTraining;
+    }
+
+    TRAINING_SESSIONS.push({
+        id: newId,
+        trainingId: training!.id,
+        sessionDate: input.completedDate,
+        trainerName: input.trainerName,
+        location: "",
+        attendeePersonalNumbers: input.attendeePersonalNumbers,
+        notes: `Přidáno manuálně | Expirace: ${input.expirationDate} | Stav: ${input.status}`,
+    });
+
+    // Uložíme přepis pro status + expirationDate do pomocné mapy
+    _manualSessionOverrides[newId] = {
+        expirationDate: input.expirationDate,
+        status: input.status,
+    };
+}
+
+// Pomocná mapa pro manuálně přidaná školení (přepis computeStatus)
+export const _manualSessionOverrides: Record<string, { expirationDate: string; status: "valid" | "expired" }> = {};

@@ -194,3 +194,21 @@ export function getPersonalNumbersWithMedicalExams(): string[] {
 export function getMedicalExamTypes(): MedicalExamType[] {
     return MEDICAL_EXAM_TYPES;
 }
+
+export function generateInitialMedicalForEmployee(personalNumber: string, hiringDate: string | null) {
+    const hiringDateObj = hiringDate ? new Date(hiringDate) : new Date();
+    const examDate = new Date(hiringDateObj);
+    examDate.setDate(examDate.getDate() - 5);
+
+    MEDICAL_EXAM_RECORDS.push({
+        id: `MEXR-NEW-${personalNumber}`,
+        examTypeId: "MED-001",
+        employeePersonalNumber: personalNumber,
+        examDate: examDate.toISOString().split("T")[0],
+        nextExamDate: null,
+        doctorName: "MUDr. Dagmar Šimková",
+        result: "Způsobilý",
+        notes: "Automaticky vygenerováno pro nového zaměstnance",
+        status: "valid"
+    });
+}

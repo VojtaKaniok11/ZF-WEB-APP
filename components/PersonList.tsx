@@ -11,6 +11,7 @@ interface PersonListProps {
     title: string;
     description: string;
     icon: React.ReactNode;
+    actionButton?: React.ReactNode;
 }
 
 export default function PersonList({
@@ -19,6 +20,7 @@ export default function PersonList({
     title,
     description,
     icon,
+    actionButton,
 }: PersonListProps) {
     const [search, setSearch] = useState("");
 
@@ -61,11 +63,12 @@ export default function PersonList({
                 </div>
             </div>
 
-            {/* Count badge */}
-            <div className="mb-4 flex items-center gap-2">
+            {/* Count badge + optional action button */}
+            <div className="mb-4 flex items-center justify-between gap-2">
                 <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
                     Nalezeno: {filtered.length} zaměstnanců
                 </span>
+                {actionButton && <div>{actionButton}</div>}
             </div>
 
             {/* List */}

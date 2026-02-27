@@ -145,3 +145,20 @@ export function getPersonalNumbersWithIluo(): string[] {
 export function getIluoSkills(): IluoSkill[] {
     return ILUO_SKILLS;
 }
+
+export function generateInitialIluoForEmployee(personalNumber: string, department: string) {
+    // Basic training for assembly department as example
+    if (department === "Montáž") {
+        ILUO_ASSESSMENTS.push({
+            id: `ASSESS-NEW-${personalNumber}`,
+            skillId: "SKILL-001",
+            employeePersonalNumber: personalNumber,
+            level: "I",
+            assessmentDate: new Date().toISOString().split("T")[0],
+            assessorName: "Martin Dvořák",
+            targetLevel: "U",
+            nextReviewDate: null,
+            notes: "Vstupní instruktáž"
+        });
+    }
+}

@@ -11,13 +11,13 @@ export default function Header() {
     return (
         <>
             <header
-                className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 sm:px-6"
+                className="sticky top-0 z-40 flex items-center justify-between px-4 py-5 sm:px-6"
                 style={{ backgroundColor: "#0054A6" }}
             >
                 {/* Left — Hamburger */}
                 <button
                     onClick={() => setIsMenuOpen((prev) => !prev)}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20"
+                    className="flex h-12 w-12 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 active:bg-white/20"
                     aria-label="Otevřít menu"
                     id="hamburger-menu-btn"
                 >
@@ -27,7 +27,7 @@ export default function Header() {
                         viewBox="0 0 24 24"
                         strokeWidth={1.5}
                         stroke="currentColor"
-                        className="size-6"
+                        className="size-7"
                     >
                         <path
                             strokeLinecap="round"

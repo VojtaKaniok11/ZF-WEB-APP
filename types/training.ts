@@ -18,7 +18,7 @@ export interface Training {
     /** Perioda platnosti v měsících (0 = jednorázové, bez expirace) */
     validityMonths: number;
     /** Kategorie školení */
-    category: "BOZP" | "PO" | "Odborné" | "Vstupní" | "Legislativní";
+    category: "BOZP" | "PO" | "Odborné" | "Vstupní" | "Legislativní" | "Ostatní";
     /** Zda je školení povinné */
     isMandatory: boolean;
 }

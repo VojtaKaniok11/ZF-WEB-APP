@@ -1,15 +1,11 @@
 import { getEmployees } from "@/lib/mock-data";
-import { getPersonalNumbersWithMedicalExams } from "@/lib/mock-medical";
 import PersonList from "@/components/PersonList";
 
 export const metadata = { title: "Lékařské prohlídky | ZF HR Portal" };
 
 export default function MedicalPage() {
-    const relevantPNs = getPersonalNumbersWithMedicalExams();
-    const allEmployees = getEmployees();
-    const employees = allEmployees.filter((e) =>
-        relevantPNs.includes(e.personalNumber)
-    );
+    const employees = getEmployees();
+
 
     return (
         <PersonList

@@ -119,14 +119,11 @@ export default function EmployeesPage() {
                 <PageHeader
                     title="Zaměstnanci"
                     description="Správa zaměstnanců a jejich informací."
-                    count={isLoading ? undefined : employees.length}
                 />
 
                 <ActionButtons
                     onAdd={() => setShowAddModal(true)}
-                    onExport={() => {
-                        /* placeholder — could export CSV */
-                    }}
+                    count={isLoading ? undefined : employees.length}
                 />
 
                 <FilterBar
