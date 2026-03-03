@@ -107,7 +107,8 @@ export default function AddTrainingModal({ employees, onClose, onSuccess }: AddT
                 body: JSON.stringify(input),
             });
             if (!res.ok) throw new Error();
-            router.refresh(); // Invaliduje Next.js cache — employee stránka dostane čerstvá data
+            router.refresh();
+            window.dispatchEvent(new Event("training-added")); // Signál pro detail stránku
             setSubmitted(true);
             setTimeout(() => {
                 onSuccess();

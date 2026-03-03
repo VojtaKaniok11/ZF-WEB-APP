@@ -1,11 +1,18 @@
-import { getEmployees } from "@/lib/mock-data";
+"use client";
+
+import { useState, useEffect } from "react";
+import { Employee } from "@/types/employee";
 import PersonList from "@/components/PersonList";
 
-export const metadata = { title: "Lékařské prohlídky | ZF HR Portal" };
-
 export default function MedicalPage() {
-    const employees = getEmployees();
+    const [employees, setEmployees] = useState<Employee[]>([]);
 
+    useEffect(() => {
+        fetch("/api/employees")
+            .then((r) => r.json())
+            .then((json) => { if (json.success) setEmployees(json.data); })
+            .catch(() => { });
+    }, []);
 
     return (
         <PersonList

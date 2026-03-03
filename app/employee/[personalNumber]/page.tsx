@@ -127,7 +127,6 @@ export default function EmployeeProfilePage() {
                 <div className="grid grid-cols-2 gap-4 border-t border-gray-200 px-6 py-5 sm:grid-cols-4">
                     <InfoItem label="Email" value={employee.email} />
                     <InfoItem label="Telefon" value={employee.phone} />
-                    <InfoItem label="Mobil" value={employee.mobile} />
                     <InfoItem label="Nadřízený" value={employee.managerName} />
                     <InfoItem label="Úroveň" value={employee.level} />
                     <InfoItem label="Uživatel" value={employee.userName} />
@@ -150,7 +149,10 @@ export default function EmployeeProfilePage() {
                         {trainings.slice(0, 4).map((t, idx) => (
                             <div key={idx} className="flex items-center justify-between rounded-xl bg-gray-50 px-3.5 py-2.5 shadow-sm">
                                 <div>
-                                    <div className="text-sm font-medium text-gray-900">{t.trainingName}</div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-sm font-medium text-gray-900">{t.trainingName}</div>
+                                        <code className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">{t.trainingId}</code>
+                                    </div>
                                     <div className="text-[13px] text-gray-500">{formatDate(t.completedDate)}</div>
                                 </div>
                                 <ExpirationBadge status={t.status} />
@@ -172,7 +174,10 @@ export default function EmployeeProfilePage() {
                         {medicals.slice(0, 4).map((m, idx) => (
                             <div key={idx} className="flex items-center justify-between rounded-xl bg-gray-50 px-3.5 py-2.5 shadow-sm">
                                 <div>
-                                    <div className="text-sm font-medium text-gray-900">{m.examTypeName}</div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-sm font-medium text-gray-900">{m.examTypeName}</div>
+                                        <code className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">{m.examTypeId}</code>
+                                    </div>
                                     <div className="text-[13px] text-gray-500">{formatDate(m.examDate)} · {m.result}</div>
                                 </div>
                                 <ExpirationBadge status={m.status} />
@@ -194,7 +199,10 @@ export default function EmployeeProfilePage() {
                         {oopp.slice(0, 4).map((o, idx) => (
                             <div key={idx} className="flex items-center justify-between rounded-xl bg-gray-50 px-3.5 py-2.5 shadow-sm">
                                 <div>
-                                    <div className="text-sm font-medium text-gray-900">{o.ooppItemName}</div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-sm font-medium text-gray-900">{o.ooppItemName}</div>
+                                        <code className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">{o.ooppItemId}</code>
+                                    </div>
                                     <div className="text-[13px] text-gray-500">{formatDate(o.lastIssueDate)} · {o.size || ""}  {o.quantity} ks</div>
                                 </div>
                                 <ExpirationBadge status={o.status} />
@@ -216,7 +224,10 @@ export default function EmployeeProfilePage() {
                         {iluo.slice(0, 5).map((i, idx) => (
                             <div key={idx} className="flex items-center justify-between rounded-xl bg-gray-50 px-3.5 py-2.5 shadow-sm">
                                 <div>
-                                    <div className="text-sm font-medium text-gray-900">{i.skillName}</div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-sm font-medium text-gray-900">{i.skillName}</div>
+                                        <code className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">{i.skillId}</code>
+                                    </div>
                                     <div className="text-[13px] text-gray-500">{i.workCenterName}</div>
                                 </div>
                                 <div className="flex items-center gap-2">

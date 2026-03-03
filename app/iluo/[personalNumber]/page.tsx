@@ -2,10 +2,24 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { getIluoRecordsForEmployee } from "@/lib/mock-iluo";
-import { getEmployeeDetail } from "@/lib/mock-data";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import type { EmployeeDetail } from "@/types/employee";
 import type { IluoLevel } from "@/types/iluo";
+
+interface IluoRecord {
+    skillId: string;
+    skillName: string;
+    workCenterId: string;
+    workCenterName: string;
+    category: string;
+    currentLevel: IluoLevel;
+    targetLevel: IluoLevel;
+    assessmentDate: string;
+    assessorName: string;
+    nextReviewDate: string | null;
+    notes: string;
+}
 
 function IluoBadge({ level }: { level: IluoLevel }) {
     const labels: Record<IluoLevel, string> = {
@@ -26,16 +40,12 @@ function ProgressBar({ current, target }: { current: IluoLevel; target: IluoLeve
     const currentIdx = order.indexOf(current);
     const targetIdx = order.indexOf(target);
     const progress = targetIdx > 0 ? ((currentIdx + 1) / (targetIdx + 1)) * 100 : 100;
-
     return (
         <div className="flex items-center gap-2">
             <div className="h-2 w-20 rounded-full bg-gray-200">
                 <div
                     className="h-2 rounded-full transition-all"
-                    style={{
-                        width: `${Math.min(progress, 100)}%`,
-                        backgroundColor: progress >= 100 ? "#047857" : "#0054A6",
-                    }}
+                    style={{ width: `${Math.min(progress, 100)}%`, backgroundColor: progress >= 100 ? "#047857" : "#0054A6" }}
                 />
             </div>
             <span className="text-xs text-gray-400">{Math.round(progress)}%</span>
@@ -46,29 +56,62 @@ function ProgressBar({ current, target }: { current: IluoLevel; target: IluoLeve
 export default function IluoDetailPage() {
     const params = useParams();
     const personalNumber = params.personalNumber as string;
-    const employee = getEmployeeDetail(personalNumber);
-    const records = getIluoRecordsForEmployee(personalNumber);
 
-    if (!employee) {
-        return (
-            <div className="mx-auto max-w-5xl px-4 py-12 text-center">
-                <p className="text-gray-500">Zaměstnanec nenalezen.</p>
-                <Link href="/iluo" className="mt-4 inline-block text-sm text-blue-600 hover:underline">← Zpět</Link>
-            </div>
-        );
-    }
+    const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
+    const [records, setRecords] = useState<IluoRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [notFound, setNotFound] = useState(false);
+
+    useEffect(() => {
+        if (!personalNumber) return;
+        const pn = encodeURIComponent(personalNumber);
+
+        async function load() {
+            setIsLoading(true);
+            try {
+                const [empRes, iluoRes] = await Promise.all([
+                    fetch(`/api/employees/${pn}`),
+                    fetch(`/api/iluo/${pn}`),
+                ]);
+                const empJson = await empRes.json();
+                if (!empJson.success) { setNotFound(true); return; }
+                setEmployee(empJson.data);
+
+                const iluoJson = await iluoRes.json();
+                if (iluoJson.success) setRecords(iluoJson.data);
+            } catch {
+                setNotFound(true);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        load();
+    }, [personalNumber]);
 
     function formatDate(d: string | null): string {
         if (!d) return "—";
         return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
     }
 
-    // Group by work center
+    if (isLoading) return (
+        <div className="flex min-h-[60vh] items-center justify-center">
+            <Loader2 size={32} className="animate-spin text-blue-500" />
+        </div>
+    );
+
+    if (notFound || !employee) return (
+        <div className="mx-auto max-w-5xl px-4 py-12 text-center">
+            <p className="text-gray-500">Zaměstnanec nenalezen.</p>
+            <Link href="/iluo" className="mt-4 inline-block text-sm text-blue-600 hover:underline">← Zpět</Link>
+        </div>
+    );
+
     const grouped = records.reduce((acc, r) => {
         if (!acc[r.workCenterName]) acc[r.workCenterName] = [];
         acc[r.workCenterName].push(r);
         return acc;
-    }, {} as Record<string, typeof records>);
+    }, {} as Record<string, IluoRecord[]>);
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -86,7 +129,6 @@ export default function IluoDetailPage() {
                 </div>
             </div>
 
-            {/* ILUO Legend */}
             <div className="mb-6 flex flex-wrap gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                 <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 mr-2 self-center">Legenda:</span>
                 <IluoBadge level="I" />
@@ -95,46 +137,45 @@ export default function IluoDetailPage() {
                 <IluoBadge level="O" />
             </div>
 
-            {/* Grouped by workcenter */}
-            {Object.entries(grouped).map(([wcName, skills]) => (
-                <div key={wcName} className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="border-b border-gray-200 px-5 py-4" style={{ backgroundColor: "#0054A6" }}>
-                        <h2 className="text-base font-semibold text-white">{wcName}</h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-gray-200 bg-gray-50/80">
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Dovednost</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Kategorie</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Aktuální</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Cíl</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Progres</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Hodnocení</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Hodnotitel</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Další</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {skills.map((r, idx) => (
-                                    <tr key={idx} className="transition-colors hover:bg-blue-50/40">
-                                        <td className="px-5 py-3 font-medium text-gray-900">{r.skillName}</td>
-                                        <td className="px-5 py-3">
-                                            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">{r.category}</span>
-                                        </td>
-                                        <td className="px-5 py-3"><IluoBadge level={r.currentLevel} /></td>
-                                        <td className="px-5 py-3"><IluoBadge level={r.targetLevel} /></td>
-                                        <td className="px-5 py-3"><ProgressBar current={r.currentLevel} target={r.targetLevel} /></td>
-                                        <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.assessmentDate)}</td>
-                                        <td className="px-5 py-3 text-gray-600">{r.assessorName}</td>
-                                        <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.nextReviewDate)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+            {records.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white py-16 shadow-sm">
+                    <p className="text-sm text-gray-400">Žádné záznamy ILUO.</p>
                 </div>
-            ))}
+            ) : (
+                Object.entries(grouped).map(([wcName, skills]) => (
+                    <div key={wcName} className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                        <div className="border-b border-gray-200 px-5 py-4" style={{ backgroundColor: "#0054A6" }}>
+                            <h2 className="text-base font-semibold text-white">{wcName}</h2>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-200 bg-gray-50/80">
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Pracoviště</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Aktuální</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Cíl</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Progres</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Hodnocení</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Hodnotitel</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {skills.map((r, idx) => (
+                                        <tr key={idx} className="transition-colors hover:bg-blue-50/40">
+                                            <td className="px-5 py-3 font-medium text-gray-900">{r.workCenterName}</td>
+                                            <td className="px-5 py-3"><IluoBadge level={r.currentLevel} /></td>
+                                            <td className="px-5 py-3"><IluoBadge level={r.targetLevel} /></td>
+                                            <td className="px-5 py-3"><ProgressBar current={r.currentLevel} target={r.targetLevel} /></td>
+                                            <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.assessmentDate)}</td>
+                                            <td className="px-5 py-3 text-gray-600">{r.assessorName}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ))
+            )}
         </div>
     );
 }

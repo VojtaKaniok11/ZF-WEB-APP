@@ -48,6 +48,8 @@ export interface TrainingSession {
 export interface EmployeeTrainingRecord {
     /** FK → Training.id */
     trainingId: string;
+    /** PK session → Trainings_Session.id */
+    sessionId: string;
     /** Název školení (z Training.name) */
     trainingName: string;
     /** Kategorie */
