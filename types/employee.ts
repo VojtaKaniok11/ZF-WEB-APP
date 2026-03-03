@@ -40,4 +40,11 @@ export interface NewEmployeePayload {
     costCenter: string | null;
     hiringDate: string | null;
     isActive: boolean;
+    phone: string;
+    email: string;
+    position: string;
+    level: string;
+    managerName: string;
+    workcenter: string;
+    bisOsobaId: string;
 }

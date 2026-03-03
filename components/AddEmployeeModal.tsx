@@ -19,6 +19,13 @@ const INITIAL_FORM: NewEmployeePayload = {
     costCenter: null,
     hiringDate: null,
     isActive: true,
+    phone: "",
+    email: "",
+    position: "",
+    level: "",
+    managerName: "",
+    workcenter: "",
+    bisOsobaId: "",
 };
 
 export default function AddEmployeeModal({
@@ -83,6 +90,7 @@ export default function AddEmployeeModal({
             isOpen={isOpen}
             onClose={handleClose}
             title="Přidat zaměstnance"
+            maxWidth="max-w-4xl"
             footer={
                 <>
                     <button
@@ -109,7 +117,7 @@ export default function AddEmployeeModal({
             )}
 
             <div className="space-y-4">
-                {/* Row 1 */}
+                {/* Row 1: Personal Number, Cost Center */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -139,7 +147,7 @@ export default function AddEmployeeModal({
                     </div>
                 </div>
 
-                {/* Row 2 */}
+                {/* Row 2: First Name, Last Name */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -167,7 +175,7 @@ export default function AddEmployeeModal({
                     </div>
                 </div>
 
-                {/* Row 3 */}
+                {/* Row 3: Department, Hiring Date */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -201,8 +209,104 @@ export default function AddEmployeeModal({
                     </div>
                 </div>
 
-                {/* Row 4 */}
+                {/* Row 4: Workcenter, Position */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Pracoviště
+                        </label>
+                        <input
+                            type="text"
+                            value={form.workcenter}
+                            onChange={(e) => updateField("workcenter", e.target.value)}
+                            placeholder="např. Linka 1"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Pozice
+                        </label>
+                        <input
+                            type="text"
+                            value={form.position}
+                            onChange={(e) => updateField("position", e.target.value)}
+                            placeholder="např. Operátor"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+                </div>
+
+                {/* Row 5: Level, Manager Name */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Úroveň
+                        </label>
+                        <input
+                            type="text"
+                            value={form.level}
+                            onChange={(e) => updateField("level", e.target.value)}
+                            placeholder="např. L2"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Nadřízený
+                        </label>
+                        <input
+                            type="text"
+                            value={form.managerName}
+                            onChange={(e) => updateField("managerName", e.target.value)}
+                            placeholder="Jméno nadřízeného"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+                </div>
+
+                {/* Row 6: Email, Phone */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Email
+                        </label>
+                        <input
+                            type="email"
+                            value={form.email}
+                            onChange={(e) => updateField("email", e.target.value)}
+                            placeholder="email@domena.cz"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Telefon
+                        </label>
+                        <input
+                            type="text"
+                            value={form.phone}
+                            onChange={(e) => updateField("phone", e.target.value)}
+                            placeholder="např. 123"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+                </div>
+
+                {/* Row 7: BIS Osoba ID, Stav */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            BIS Osoba ID
+                        </label>
+                        <input
+                            type="text"
+                            value={form.bisOsobaId}
+                            onChange={(e) => updateField("bisOsobaId", e.target.value)}
+                            placeholder="např. 1234"
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-gray-700">
                             Stav

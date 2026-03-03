@@ -2,30 +2,76 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { getOoppRecordsForEmployee } from "@/lib/mock-oopp";
-import { getEmployeeDetail } from "@/lib/mock-data";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import ExpirationBadge from "@/components/ExpirationBadge";
+import type { EmployeeDetail } from "@/types/employee";
+
+interface OoppRecord {
+    ooppItemId: string;
+    ooppItemName: string;
+    category: string;
+    lastIssueDate: string;
+    nextEntitlementDate: string | null;
+    quantity: number;
+    size: string | null;
+    notes: string;
+    status: "issued" | "eligible_soon" | "eligible";
+}
 
 export default function OoppDetailPage() {
     const params = useParams();
     const personalNumber = params.personalNumber as string;
-    const employee = getEmployeeDetail(personalNumber);
-    const records = getOoppRecordsForEmployee(personalNumber);
 
-    if (!employee) {
-        return (
-            <div className="mx-auto max-w-5xl px-4 py-12 text-center">
-                <p className="text-gray-500">Zaměstnanec nenalezen.</p>
-                <Link href="/oopp" className="mt-4 inline-block text-sm text-blue-600 hover:underline">← Zpět</Link>
-            </div>
-        );
-    }
+    const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
+    const [records, setRecords] = useState<OoppRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [notFound, setNotFound] = useState(false);
+
+    useEffect(() => {
+        if (!personalNumber) return;
+        const pn = encodeURIComponent(personalNumber);
+
+        async function load() {
+            setIsLoading(true);
+            try {
+                const [empRes, ooppRes] = await Promise.all([
+                    fetch(`/api/employees/${pn}`),
+                    fetch(`/api/oopp/${pn}`),
+                ]);
+                const empJson = await empRes.json();
+                if (!empJson.success) { setNotFound(true); return; }
+                setEmployee(empJson.data);
+
+                const ooppJson = await ooppRes.json();
+                if (ooppJson.success) setRecords(ooppJson.data);
+            } catch {
+                setNotFound(true);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+
+        load();
+    }, [personalNumber]);
 
     function formatDate(d: string | null): string {
-        if (!d) return "—";
+        if (!d || d === "—") return "—";
         return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
     }
+
+    if (isLoading) return (
+        <div className="flex min-h-[60vh] items-center justify-center">
+            <Loader2 size={32} className="animate-spin text-blue-500" />
+        </div>
+    );
+
+    if (notFound || !employee) return (
+        <div className="mx-auto max-w-5xl px-4 py-12 text-center">
+            <p className="text-gray-500">Zaměstnanec nenalezen.</p>
+            <Link href="/oopp" className="mt-4 inline-block text-sm text-blue-600 hover:underline">← Zpět</Link>
+        </div>
+    );
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -50,7 +96,6 @@ export default function OoppDetailPage() {
 
                 {records.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
-
                         <p className="text-sm text-gray-400">Žádné záznamy o výdejích OOPP.</p>
                     </div>
                 ) : (
@@ -62,8 +107,7 @@ export default function OoppDetailPage() {
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Kategorie</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Vydáno</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Další nárok</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Ks</th>
-                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Velikost</th>
+                                    <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Přiřazení</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
                                 </tr>
                             </thead>
@@ -76,7 +120,6 @@ export default function OoppDetailPage() {
                                         </td>
                                         <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.lastIssueDate)}</td>
                                         <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.nextEntitlementDate)}</td>
-                                        <td className="px-5 py-3 text-center text-gray-600">{r.quantity}</td>
                                         <td className="px-5 py-3 text-gray-600">{r.size || "—"}</td>
                                         <td className="px-5 py-3">
                                             <ExpirationBadge status={r.status} />

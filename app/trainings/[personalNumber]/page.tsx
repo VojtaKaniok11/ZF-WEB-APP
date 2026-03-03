@@ -42,6 +42,11 @@ export default function TrainingDetailPage() {
         }
 
         load();
+
+        // Po přidání školení z modalu znovu načteme záznamy
+        function handleTrainingAdded() { load(); }
+        window.addEventListener("training-added", handleTrainingAdded);
+        return () => window.removeEventListener("training-added", handleTrainingAdded);
     }, [personalNumber]);
 
     function formatDate(d: string | null): string {

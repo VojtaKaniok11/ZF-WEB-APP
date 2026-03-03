@@ -47,6 +47,7 @@ export interface MedicalExamRecord {
  */
 export interface EmployeeMedicalRecord {
     examTypeId: string;
+    recordId: string;
     examTypeName: string;
     category: MedicalExamType["category"];
     examDate: string;

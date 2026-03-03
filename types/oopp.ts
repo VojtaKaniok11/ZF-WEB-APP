@@ -61,6 +61,7 @@ export interface OoppIssueRecord {
  * Denormalizovaný pohled pro UI — jeden OOPP výdej jednoho zaměstnance
  */
 export interface EmployeeOoppRecord {
+    issueId: string;
     ooppItemId: string;
     ooppItemName: string;
     category: OoppItem["category"];
@@ -68,6 +69,7 @@ export interface EmployeeOoppRecord {
     nextEntitlementDate: string | null;
     quantity: number;
     size: string | null;
+    notes: string;
     /** Zda má zaměstnanec nárok na nový výdej */
     status: "issued" | "eligible_soon" | "eligible";
 }

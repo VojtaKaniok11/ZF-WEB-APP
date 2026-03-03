@@ -52,6 +52,7 @@ export interface IluoAssessment {
  * Denormalizovaný pohled pro UI — jedna dovednost jednoho zaměstnance
  */
 export interface EmployeeIluoRecord {
+    assessmentId: string;
     skillId: string;
     skillName: string;
     workCenterId: string;
@@ -62,4 +63,5 @@ export interface EmployeeIluoRecord {
     assessmentDate: string;
     assessorName: string;
     nextReviewDate: string | null;
+    notes: string;
 }

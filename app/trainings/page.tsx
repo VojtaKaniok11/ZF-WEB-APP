@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { getEmployees } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { Employee } from "@/types/employee";
 import PersonList from "@/components/PersonList";
 import AddTrainingModal from "@/components/AddTrainingModal";
 import { Plus } from "lucide-react";
 
 export default function TrainingsPage() {
-    const employees = getEmployees();
+    const [employees, setEmployees] = useState<Employee[]>([]);
     const [modalOpen, setModalOpen] = useState(false);
-    const [refreshKey, setRefreshKey] = useState(0);
+
+    useEffect(() => {
+        fetch("/api/employees")
+            .then((r) => r.json())
+            .then((json) => { if (json.success) setEmployees(json.data); })
+            .catch(() => { });
+    }, []);
 
     return (
         <>
@@ -34,14 +40,13 @@ export default function TrainingsPage() {
                         Přidat školení
                     </button>
                 }
-                key={refreshKey}
             />
 
             {modalOpen && (
                 <AddTrainingModal
                     employees={employees}
                     onClose={() => setModalOpen(false)}
-                    onSuccess={() => setRefreshKey((k) => k + 1)}
+                    onSuccess={() => setModalOpen(false)}
                 />
             )}
         </>
