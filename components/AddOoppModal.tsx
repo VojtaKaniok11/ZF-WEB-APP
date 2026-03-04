@@ -5,69 +5,48 @@ import { useRouter } from "next/navigation";
 import { X, Search, Check, UserCheck, Loader2 } from "lucide-react";
 import { Employee } from "@/types/employee";
 
-const RESULTS = ["Způsobilý", "Nezpůsobilý", "Způsobilý s podmínkou"] as const;
-
-interface ExamType {
+interface OoppItem {
     ID: string;
     Name: string;
-    ValidityMonths: number;
     Category: string;
-    Description: string | null;
 }
 
-interface AddMedicalModalProps {
+interface AddOoppModalProps {
     employees: Employee[];
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMedicalModalProps) {
+export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppModalProps) {
     const router = useRouter();
 
-    const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+    // Katalog OOPP pomůcek
+    const [ooppItems, setOoppItems] = useState<OoppItem[]>([]);
 
-    // Form fields
-    const [examTypeName, setExamTypeName] = useState("");
-    const [examDate, setExamDate] = useState("");
-    const [nextExamDate, setNextExamDate] = useState("");
-    const [doctorName, setDoctorName] = useState("");
-    const [result, setResult] = useState<typeof RESULTS[number]>("Způsobilý");
+    // Formulář
+    const [ooppItemId, setOoppItemId] = useState("");
+    const [issueDate, setIssueDate] = useState("");
+    const [nextEntitlementDate, setNextEntitlementDate] = useState("");
+    const [quantity, setQuantity] = useState(1);
+    const [size, setSize] = useState("");
     const [notes, setNotes] = useState("");
 
-    // Employee selection
+    // Výběr zaměstnanců
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<Set<string>>(new Set());
 
-    // Errors
+    // Stav
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitted, setSubmitted] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Načti katalog OOPP z API
     useEffect(() => {
-        fetch("/api/medical-types")
-            .then(res => res.json())
-            .then(json => {
-                if (json.success) {
-                    setExamTypes(json.data);
-                }
-            })
+        fetch("/api/oopp")
+            .then((r) => r.json())
+            .then((json) => { if (json.success) setOoppItems(json.data); })
             .catch(() => { });
     }, []);
-
-    // Auto-calculate next exam date
-    useEffect(() => {
-        if (examDate && examTypeName) {
-            // Try to find the period by exact name match
-            const type = examTypes.find(t => t.Name === examTypeName || t.ID === examTypeName);
-            if (type && type.ValidityMonths > 0) {
-                const date = new Date(examDate);
-                date.setMonth(date.getMonth() + type.ValidityMonths);
-                setNextExamDate(date.toISOString().split("T")[0]);
-            } else {
-                setNextExamDate("");
-            }
-        }
-    }, [examDate, examTypeName, examTypes]);
 
     const filtered = useMemo(() => {
         if (!search.trim()) return employees;
@@ -108,9 +87,8 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
 
     function validate() {
         const e: Record<string, string> = {};
-        if (!examTypeName.trim()) e.examTypeName = "Druh prohlídky je povinný.";
-        if (!examDate) e.examDate = "Datum vyšetření je povinné.";
-        if (!doctorName.trim()) e.doctorName = "Jméno lékaře nebo klinika je povinné.";
+        if (!ooppItemId) e.ooppItemId = "Vyberte OOPP pomůcku.";
+        if (!issueDate) e.issueDate = "Datum výdeje je povinné.";
         if (selected.size === 0) e.employees = "Vyberte alespoň jednoho zaměstnance.";
         return e;
     }
@@ -120,37 +98,27 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
         setErrors(e);
         if (Object.keys(e).length > 0) return;
 
-        // Try to identify if the typed name matches a known ID
-        const matchedType = examTypes.find(t => t.Name === examTypeName || t.ID === examTypeName);
-
-        const input = {
-            examTypeName: examTypeName.trim(),
-            examTypeId: matchedType?.ID || null, // Send ID if we matched, else null (backend will handle creating)
-            examDate,
-            nextExamDate,
-            doctorName: doctorName.trim(),
-            result,
-            notes: notes.trim(),
-            attendeePersonalNumbers: Array.from(selected),
-        };
-
         setIsSaving(true);
         try {
-            const res = await fetch("/api/medical", {
+            const res = await fetch("/api/oopp", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(input),
+                body: JSON.stringify({
+                    ooppItemId,
+                    issueDate,
+                    nextEntitlementDate: nextEntitlementDate || null,
+                    quantity,
+                    size: size || null,
+                    notes: notes || null,
+                    attendeePersonalNumbers: Array.from(selected),
+                }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Při ukládání došlo k chybě.");
-
+            if (!res.ok) throw new Error(data.error || "Chyba při ukládání.");
             router.refresh();
-            window.dispatchEvent(new Event("medical-added"));
+            window.dispatchEvent(new Event("oopp-added"));
             setSubmitted(true);
-            setTimeout(() => {
-                onSuccess();
-                onClose();
-            }, 1200);
+            setTimeout(() => { onSuccess(); onClose(); }, 1200);
         } catch (err: any) {
             setErrors({ submit: err.message || "Něco se pokazilo. Zkuste to znovu." });
         } finally {
@@ -160,16 +128,28 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
 
     const allFilteredSelected = filtered.length > 0 && filtered.every((e) => selected.has(e.personalNumber));
 
+    // Seskupení pomůcek podle kategorie
+    const groupedItems = useMemo(() => {
+        const groups: Record<string, OoppItem[]> = {};
+        for (const item of ooppItems) {
+            if (!groups[item.Category]) groups[item.Category] = [];
+            groups[item.Category].push(item);
+        }
+        return groups;
+    }, [ooppItems]);
+
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+
+                {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200" style={{ background: "linear-gradient(135deg, #0054A6 0%, #003d7a 100%)" }}>
                     <div>
-                        <h2 className="text-lg font-bold text-white">Přidat lékařskou prohlídku</h2>
-                        <p className="text-sm text-blue-200 mt-0.5">Zadejte vyšetření pro vybrané zaměstnance</p>
+                        <h2 className="text-lg font-bold text-white">Přidat výdej OOPP</h2>
+                        <p className="text-sm text-blue-200 mt-0.5">Vyplňte detaily a vyberte zaměstnance</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -179,123 +159,123 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                     </button>
                 </div>
 
+                {/* Tělo */}
                 <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
-                    {/* Error display */}
+
+                    {/* Submit error */}
                     {errors.submit && (
                         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
                             {errors.submit}
                         </div>
                     )}
 
+                    {/* Success */}
                     {submitted && (
                         <div className="flex flex-col items-center justify-center py-10 gap-3">
                             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
                                 <Check size={32} className="text-emerald-600" />
                             </div>
-                            <p className="text-base font-semibold text-gray-900">Prohlídka byla úspěšně přidána!</p>
+                            <p className="text-base font-semibold text-gray-900">Výdej OOPP byl úspěšně uložen!</p>
                             <p className="text-sm text-gray-500">Záznam byl uložen pro {selected.size} zaměstnanc{selected.size === 1 ? "e" : "ů"}.</p>
                         </div>
                     )}
 
                     {!submitted && (
                         <>
+                            {/* Formulář */}
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                {/* Druh prohlídky - Volné psaní s nápovědou */}
+
+                                {/* OOPP pomůcka — celá šířka */}
                                 <div className="sm:col-span-2">
                                     <label className="mb-1.5 block text-sm font-semibold text-gray-700">
-                                        Druh prohlídky <span className="text-red-500">*</span>
+                                        OOPP pomůcka <span className="text-red-500">*</span>
                                     </label>
-                                    <input
-                                        type="text"
-                                        list="exam-types-list"
-                                        value={examTypeName}
-                                        onChange={(e) => setExamTypeName(e.target.value)}
-                                        placeholder="Vyberte ze seznamu nebo napište vlastní typ..."
-                                        className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${errors.examTypeName ? "border-red-400 bg-red-50" : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white"}`}
-                                    />
-                                    <datalist id="exam-types-list">
-                                        {examTypes.map((t) => (
-                                            <option key={t.ID} value={t.Name} />
-                                        ))}
-                                    </datalist>
-                                    {errors.examTypeName && <p className="mt-1 text-xs text-red-500">{errors.examTypeName}</p>}
-                                </div>
-
-                                {/* Doktor/Klinika */}
-                                <div>
-                                    <label className="mb-1.5 block text-sm font-semibold text-gray-700">
-                                        Lékař / zdravotní středisko <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={doctorName}
-                                        onChange={(e) => setDoctorName(e.target.value)}
-                                        placeholder="MUDr. Novák, Městská nemocnice..."
-                                        className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${errors.doctorName ? "border-red-400 bg-red-50" : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white"}`}
-                                    />
-                                    {errors.doctorName && <p className="mt-1 text-xs text-red-500">{errors.doctorName}</p>}
-                                </div>
-
-                                {/* Výsledek */}
-                                <div>
-                                    <label className="mb-1.5 block text-sm font-semibold text-gray-700">Výsledek vyšetření</label>
                                     <select
-                                        value={result}
-                                        onChange={(e) => setResult(e.target.value as typeof RESULTS[number])}
-                                        className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                        value={ooppItemId}
+                                        onChange={(e) => setOoppItemId(e.target.value)}
+                                        className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${errors.ooppItemId ? "border-red-400 bg-red-50" : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white"}`}
                                     >
-                                        {RESULTS.map((r) => (
-                                            <option key={r} value={r}>{r}</option>
+                                        <option value="">— Vyberte pomůcku —</option>
+                                        {Object.entries(groupedItems).map(([cat, items]) => (
+                                            <optgroup key={cat} label={cat}>
+                                                {items.map((item) => (
+                                                    <option key={item.ID} value={item.ID}>{item.Name}</option>
+                                                ))}
+                                            </optgroup>
                                         ))}
                                     </select>
+                                    {errors.ooppItemId && <p className="mt-1 text-xs text-red-500">{errors.ooppItemId}</p>}
                                 </div>
 
-                                {/* Datum vyšetření */}
+                                {/* Datum výdeje */}
                                 <div>
                                     <label className="mb-1.5 block text-sm font-semibold text-gray-700">
-                                        Datum vyšetření <span className="text-red-500">*</span>
+                                        Datum výdeje <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="date"
-                                        value={examDate}
-                                        onChange={(e) => setExamDate(e.target.value)}
-                                        className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${errors.examDate ? "border-red-400 bg-red-50" : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white"}`}
+                                        value={issueDate}
+                                        onChange={(e) => setIssueDate(e.target.value)}
+                                        className={`w-full rounded-xl border px-4 py-2.5 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${errors.issueDate ? "border-red-400 bg-red-50" : "border-gray-300 bg-gray-50 focus:border-blue-500 focus:bg-white"}`}
                                     />
-                                    {errors.examDate && <p className="mt-1 text-xs text-red-500">{errors.examDate}</p>}
+                                    {errors.issueDate && <p className="mt-1 text-xs text-red-500">{errors.issueDate}</p>}
                                 </div>
 
-                                {/* Datum expirace */}
+                                {/* Datum dalšího nároku */}
                                 <div>
                                     <label className="mb-1.5 block text-sm font-semibold text-gray-700">
-                                        Ukončení platnosti (Expirace)
+                                        Datum dalšího nároku
                                     </label>
                                     <input
                                         type="date"
-                                        value={nextExamDate}
-                                        onChange={(e) => setNextExamDate(e.target.value)}
+                                        value={nextEntitlementDate}
+                                        onChange={(e) => setNextEntitlementDate(e.target.value)}
                                         className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                     />
-                                    <p className="mt-1 text-[11px] text-gray-500">Auto-kalkulace na základě druhu (pokud má periodu)</p>
+                                </div>
+
+                                {/* Množství */}
+                                <div>
+                                    <label className="mb-1.5 block text-sm font-semibold text-gray-700">Množství</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={quantity}
+                                        onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                        className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                </div>
+
+                                {/* Velikost */}
+                                <div>
+                                    <label className="mb-1.5 block text-sm font-semibold text-gray-700">Velikost / specifikace</label>
+                                    <input
+                                        type="text"
+                                        value={size}
+                                        onChange={(e) => setSize(e.target.value)}
+                                        placeholder="např. 42, M, L..."
+                                        className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    />
                                 </div>
 
                                 {/* Poznámka */}
                                 <div className="sm:col-span-2">
-                                    <label className="mb-1.5 block text-sm font-semibold text-gray-700">Poznámka (nepovinné)</label>
-                                    <input
-                                        type="text"
+                                    <label className="mb-1.5 block text-sm font-semibold text-gray-700">Poznámka</label>
+                                    <textarea
                                         value={notes}
                                         onChange={(e) => setNotes(e.target.value)}
-                                        placeholder="Případná omezení a dieta..."
-                                        className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                        rows={2}
+                                        placeholder="Volitelná poznámka..."
+                                        className="w-full rounded-xl border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
                                     />
                                 </div>
                             </div>
 
-                            {/* Employee selector */}
+                            {/* Výběr zaměstnanců */}
                             <div>
                                 <div className="mb-2 flex items-center justify-between">
                                     <label className="text-sm font-semibold text-gray-700">
-                                        Prohlídku absolvovali <span className="text-red-500">*</span>
+                                        Zaměstnanci <span className="text-red-500">*</span>
                                         {selected.size > 0 && (
                                             <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10">
                                                 <UserCheck size={11} /> {selected.size} vybráno
@@ -303,16 +283,13 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                                         )}
                                     </label>
                                     {filtered.length > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={toggleAll}
-                                            className="text-xs font-medium text-blue-600 hover:underline"
-                                        >
+                                        <button type="button" onClick={toggleAll} className="text-xs font-medium text-blue-600 hover:underline">
                                             {allFilteredSelected ? "Odznačit zobrazené" : "Vybrat zobrazené"}
                                         </button>
                                     )}
                                 </div>
 
+                                {/* Vyhledávání */}
                                 <div className="relative mb-3">
                                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                     <input
@@ -324,11 +301,9 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                                     />
                                 </div>
 
-                                <div className={`overflow-y-auto rounded-xl border ${errors.employees ? "border-red-400" : "border-gray-200"} bg-white`} style={{ maxHeight: "200px" }}>
+                                <div className={`overflow-y-auto rounded-xl border ${errors.employees ? "border-red-400" : "border-gray-200"} bg-white`} style={{ maxHeight: "240px" }}>
                                     {filtered.length === 0 ? (
-                                        <div className="flex items-center justify-center py-10 text-sm text-gray-400">
-                                            Žádný zaměstnanec nenalezen.
-                                        </div>
+                                        <div className="flex items-center justify-center py-10 text-sm text-gray-400">Žádný zaměstnanec nenalezen.</div>
                                     ) : (
                                         <ul className="divide-y divide-gray-100">
                                             {filtered.map((emp) => {
@@ -347,12 +322,8 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                                                                 {emp.firstName.charAt(0)}{emp.lastName.charAt(0)}
                                                             </span>
                                                             <span className="flex-1 min-w-0">
-                                                                <span className="block text-sm font-medium text-gray-900 truncate">
-                                                                    {emp.firstName} {emp.lastName}
-                                                                </span>
-                                                                <span className="block text-xs text-gray-500 truncate">
-                                                                    {emp.personalNumber} · {emp.department}
-                                                                </span>
+                                                                <span className="block text-sm font-medium text-gray-900 truncate">{emp.firstName} {emp.lastName}</span>
+                                                                <span className="block text-xs text-gray-500 truncate">{emp.personalNumber} · {emp.department}</span>
                                                             </span>
                                                         </button>
                                                     </li>
@@ -367,6 +338,7 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                     )}
                 </div>
 
+                {/* Footer */}
                 {!submitted && (
                     <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
                         <button
@@ -384,7 +356,7 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                             style={{ backgroundColor: "#0054A6" }}
                         >
                             {isSaving && <Loader2 size={15} className="animate-spin" />}
-                            {isSaving ? "Ukládám..." : "Uložit prohlídku"}
+                            {isSaving ? "Ukládám..." : "Uložit výdej"}
                         </button>
                     </div>
                 )}

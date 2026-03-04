@@ -1,18 +1,15 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import { headers } from "next/headers";
 import { Employee } from "@/types/employee";
 import PersonList from "@/components/PersonList";
 
-export default function IluoPage() {
-    const [employees, setEmployees] = useState<Employee[]>([]);
+export default async function IluoPage() {
+    const host = (await headers()).get("host");
+    const protocol = host?.includes("localhost") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
 
-    useEffect(() => {
-        fetch("/api/employees")
-            .then((r) => r.json())
-            .then((json) => { if (json.success) setEmployees(json.data); })
-            .catch(() => { });
-    }, []);
+    const res = await fetch(`${baseUrl}/api/employees`, { cache: "no-store" });
+    const json = (await res.json()) as { success: boolean; data: Employee[] };
+    const employees = json.success ? json.data : [];
 
     return (
         <PersonList

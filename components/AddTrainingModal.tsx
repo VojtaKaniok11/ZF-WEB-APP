@@ -2,9 +2,18 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { X, Search, Check, UserCheck } from "lucide-react";
+import { X, Search, Check, UserCheck, Loader2 } from "lucide-react";
 import { Employee } from "@/types/employee";
-import type { NewTrainingSessionInput } from "@/lib/mock-trainings";
+
+interface NewTrainingSessionInput {
+    trainingName: string;
+    category: string;
+    completedDate: string;
+    expirationDate: string;
+    trainerName: string;
+    status: "valid" | "expired";
+    attendeePersonalNumbers: string[];
+}
 
 const CATEGORIES = ["BOZP", "PO", "Odborné", "Vstupní", "Legislativní", "Ostatní"] as const;
 const STATUS_OPTIONS = [
@@ -32,9 +41,10 @@ export default function AddTrainingModal({ employees, onClose, onSuccess }: AddT
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<Set<string>>(new Set());
 
-    // Errors
+    // Errors & loading
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitted, setSubmitted] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const filtered = useMemo(() => {
         if (!search.trim()) return employees;
@@ -100,22 +110,26 @@ export default function AddTrainingModal({ employees, onClose, onSuccess }: AddT
             attendeePersonalNumbers: Array.from(selected),
         };
 
+        setIsSaving(true);
         try {
             const res = await fetch("/api/trainings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(input),
             });
-            if (!res.ok) throw new Error();
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Chyba při ukládání.");
             router.refresh();
-            window.dispatchEvent(new Event("training-added")); // Signál pro detail stránku
+            window.dispatchEvent(new Event("training-added"));
             setSubmitted(true);
             setTimeout(() => {
                 onSuccess();
                 onClose();
             }, 1200);
-        } catch {
-            setErrors({ submit: "Něco se pokazilo. Zkuste to znovu." });
+        } catch (err: any) {
+            setErrors({ submit: err.message || "Něco se pokazilo. Zkuste to znovu." });
+        } finally {
+            setIsSaving(false);
         }
     }
 
@@ -144,6 +158,13 @@ export default function AddTrainingModal({ employees, onClose, onSuccess }: AddT
 
                 {/* Scrollable body */}
                 <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+                    {/* Submit error */}
+                    {errors.submit && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                            {errors.submit}
+                        </div>
+                    )}
 
                     {/* Success state */}
                     {submitted && (
@@ -350,10 +371,12 @@ export default function AddTrainingModal({ employees, onClose, onSuccess }: AddT
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
+                            disabled={isSaving}
+                            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{ backgroundColor: "#0054A6" }}
                         >
-                            Přidat školení
+                            {isSaving && <Loader2 size={15} className="animate-spin" />}
+                            {isSaving ? "Ukládám..." : "Přidat školení"}
                         </button>
                     </div>
                 )}
