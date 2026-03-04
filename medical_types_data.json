@@ -1,0 +1,37 @@
+[
+  {
+    "ID": "MED-001",
+    "Name": "Vstupní prohlídka",
+    "Description": "Vstupní lékařská prohlídka při nástupu",
+    "ValidityMonths": 0,
+    "Category": "Vstupní"
+  },
+  {
+    "ID": "MED-002",
+    "Name": "Periodická prohlídka – obecná",
+    "Description": "Pravidelná periodická prohlídka",
+    "ValidityMonths": 24,
+    "Category": "Periodická"
+  },
+  {
+    "ID": "MED-003",
+    "Name": "Periodická prohlídka – riziková pracoviště",
+    "Description": "Zkrácená perioda",
+    "ValidityMonths": 12,
+    "Category": "Periodická"
+  },
+  {
+    "ID": "MED-004",
+    "Name": "Řidičský průkaz",
+    "Description": "Prohlídka pro řidiče referentských vozidel",
+    "ValidityMonths": 24,
+    "Category": "Řidičský průkaz"
+  },
+  {
+    "ID": "MED-005",
+    "Name": "Noční práce",
+    "Description": "Způsobilost pro noční směny",
+    "ValidityMonths": 12,
+    "Category": "Periodická"
+  }
+]

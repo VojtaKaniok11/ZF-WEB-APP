@@ -1,9 +1,5 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import StatusBadge from "@/components/StatusBadge";
 import ExpirationBadge from "@/components/ExpirationBadge";
 import type { IluoLevel } from "@/types/iluo";
@@ -13,89 +9,37 @@ import type { EmployeeMedicalRecord } from "@/types/medical";
 import type { EmployeeOoppRecord } from "@/types/oopp";
 import type { EmployeeIluoRecord } from "@/types/iluo";
 
-function IluoBadge({ level }: { level: IluoLevel }) {
-    const labels: Record<IluoLevel, string> = {
-        I: "I", L: "L", U: "U", O: "O",
-    };
-    return (
-        <span className={`iluo-badge-${level} inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold`}>
-            {labels[level]}
-        </span>
-    );
-}
+export default async function EmployeeProfilePage({ params }: { params: { personalNumber: string } }) {
+    const personalNumber = encodeURIComponent(params.personalNumber);
 
-export default function EmployeeProfilePage() {
-    const params = useParams();
-    const personalNumber = params.personalNumber as string;
+    // Server‑side fetch all related data
+    const [empRes, trnRes, medRes, ooppRes, iluoRes] = await Promise.all([
+        fetch(`/api/employees/${personalNumber}`),
+        fetch(`/api/trainings/${personalNumber}`),
+        fetch(`/api/medical/${personalNumber}`),
+        fetch(`/api/oopp/${personalNumber}`),
+        fetch(`/api/iluo/${personalNumber}`),
+    ]);
 
-    const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
-    const [trainings, setTrainings] = useState<EmployeeTrainingRecord[]>([]);
-    const [medicals, setMedicals] = useState<EmployeeMedicalRecord[]>([]);
-    const [oopp, setOopp] = useState<EmployeeOoppRecord[]>([]);
-    const [iluo, setIluo] = useState<EmployeeIluoRecord[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [notFound, setNotFound] = useState(false);
-
-    useEffect(() => {
-        if (!personalNumber) return;
-        const pn = encodeURIComponent(personalNumber);
-
-        async function loadAll() {
-            setIsLoading(true);
-            try {
-                const [empRes, trnRes, medRes, ooppRes, iluoRes] = await Promise.all([
-                    fetch(`/api/employees/${pn}`),
-                    fetch(`/api/trainings/${pn}`),
-                    fetch(`/api/medical/${pn}`),
-                    fetch(`/api/oopp/${pn}`),
-                    fetch(`/api/iluo/${pn}`),
-                ]);
-
-                const empJson = await empRes.json();
-                if (!empJson.success) { setNotFound(true); return; }
-                setEmployee(empJson.data);
-
-                const trnJson = await trnRes.json();
-                if (trnJson.success) setTrainings(trnJson.data);
-
-                const medJson = await medRes.json();
-                if (medJson.success) setMedicals(medJson.data);
-
-                const ooppJson = await ooppRes.json();
-                if (ooppJson.success) setOopp(ooppJson.data);
-
-                const iluoJson = await iluoRes.json();
-                if (iluoJson.success) setIluo(iluoJson.data);
-            } catch {
-                setNotFound(true);
-            } finally {
-                setIsLoading(false);
-            }
-        }
-
-        loadAll();
-    }, [personalNumber]);
-
-    function formatDate(d: string | null): string {
-        if (!d) return "—";
-        return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
-    }
-
-    if (isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center">
-                <Loader2 size={36} className="animate-spin text-blue-500" />
-            </div>
-        );
-    }
-
-    if (notFound || !employee) {
+    const empJson = await empRes.json();
+    if (!empJson.success) {
         return (
             <div className="mx-auto max-w-5xl px-4 py-12 text-center">
                 <p className="text-gray-500">Zaměstnanec nenalezen.</p>
                 <Link href="/" className="mt-4 inline-block text-sm text-blue-600 hover:underline">← Zpět na přehled</Link>
             </div>
         );
+    }
+    const employee: EmployeeDetail = empJson.data;
+
+    const trainings: EmployeeTrainingRecord[] = (await trnRes.json()).success ? (await trnRes.json()).data : [];
+    const medicals: EmployeeMedicalRecord[] = (await medRes.json()).success ? (await medRes.json()).data : [];
+    const oopp: EmployeeOoppRecord[] = (await ooppRes.json()).success ? (await ooppRes.json()).data : [];
+    const iluo: EmployeeIluoRecord[] = (await iluoRes.json()).success ? (await iluoRes.json()).data : [];
+
+    function formatDate(d: string | null): string {
+        if (!d) return "—";
+        return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
     }
 
     return (
@@ -108,7 +52,6 @@ export default function EmployeeProfilePage() {
             <div className="mb-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="px-6 py-5" style={{ background: "linear-gradient(135deg, #0054A6 0%, #003d7a 100%)" }}>
                     <div className="flex items-center gap-5">
-                        {/* Avatar */}
                         <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full bg-white/20 text-2xl font-bold text-white ring-4 ring-white/30">
                             {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
                         </div>
@@ -135,12 +78,11 @@ export default function EmployeeProfilePage() {
 
             {/* ─── Dashboard cards grid ─── */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
                 {/* 📋 Školení */}
                 <DashboardCard
                     title="Školení"
                     count={trainings.length}
-                    linkHref={`/trainings/${personalNumber}`}
+                    linkHref={`/trainings/${employee.personalNumber}`}
                     linkLabel="Zobrazit vše"
                     isEmpty={trainings.length === 0}
                     emptyMessage="Žádné záznamy o školení."
@@ -165,7 +107,7 @@ export default function EmployeeProfilePage() {
                 <DashboardCard
                     title="Lékařské prohlídky"
                     count={medicals.length}
-                    linkHref={`/medical/${personalNumber}`}
+                    linkHref={`/medical/${employee.personalNumber}`}
                     linkLabel="Zobrazit vše"
                     isEmpty={medicals.length === 0}
                     emptyMessage="Žádné záznamy o prohlídkách."
@@ -190,7 +132,7 @@ export default function EmployeeProfilePage() {
                 <DashboardCard
                     title="OOPP"
                     count={oopp.length}
-                    linkHref={`/oopp/${personalNumber}`}
+                    linkHref={`/oopp/${employee.personalNumber}`}
                     linkLabel="Zobrazit vše"
                     isEmpty={oopp.length === 0}
                     emptyMessage="Žádné záznamy o výdejích."
@@ -203,7 +145,7 @@ export default function EmployeeProfilePage() {
                                         <div className="text-sm font-medium text-gray-900">{o.ooppItemName}</div>
                                         <code className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600">{o.ooppItemId}</code>
                                     </div>
-                                    <div className="text-[13px] text-gray-500">{formatDate(o.lastIssueDate)} · {o.size || ""}  {o.quantity} ks</div>
+                                    <div className="text-[13px] text-gray-500">{formatDate(o.lastIssueDate)} · {o.size || ""} {o.quantity} ks</div>
                                 </div>
                                 <ExpirationBadge status={o.status} />
                             </div>
@@ -215,7 +157,7 @@ export default function EmployeeProfilePage() {
                 <DashboardCard
                     title="ILUO"
                     count={iluo.length}
-                    linkHref={`/iluo/${personalNumber}`}
+                    linkHref={`/iluo/${employee.personalNumber}`}
                     linkLabel="Zobrazit vše"
                     isEmpty={iluo.length === 0}
                     emptyMessage="Žádné ILUO hodnocení."
@@ -244,7 +186,12 @@ export default function EmployeeProfilePage() {
     );
 }
 
-/* ─── Sub-components ─── */
+function IluoBadge({ level }: { level: IluoLevel }) {
+    const labels: Record<IluoLevel, string> = { I: "I", L: "L", U: "U", O: "O" };
+    return (
+        <span className={`iluo-badge-${level} inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold`}>{labels[level]}</span>
+    );
+}
 
 function InfoItem({ label, value }: { label: string; value: string }) {
     return (
@@ -278,10 +225,7 @@ function DashboardCard({
                 <h3 className="text-base font-bold text-gray-900">
                     {title} <span className="ml-1 text-[13px] font-normal text-gray-400">({count})</span>
                 </h3>
-                <Link
-                    href={linkHref}
-                    className="text-[13px] font-medium text-[#0054A6] transition-colors hover:underline"
-                >
+                <Link href={linkHref} className="text-[13px] font-medium text-[#0054A6] transition-colors hover:underline">
                     {linkLabel} →
                 </Link>
             </div>
