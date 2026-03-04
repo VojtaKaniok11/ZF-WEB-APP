@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "html2pdf.js": "^0.14.0",
     "lucide-react": "^0.575.0",
     "msnodesqlv8": "^5.1.5",
     "mssql": "^12.2.0",

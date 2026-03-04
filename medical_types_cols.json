@@ -1,0 +1,22 @@
+[
+  {
+    "COLUMN_NAME": "ID",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "Name",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "Description",
+    "IS_NULLABLE": "YES"
+  },
+  {
+    "COLUMN_NAME": "ValidityMonths",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "Category",
+    "IS_NULLABLE": "NO"
+  }
+]

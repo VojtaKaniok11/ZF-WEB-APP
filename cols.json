@@ -1,0 +1,38 @@
+[
+  {
+    "COLUMN_NAME": "ID",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "SkillID",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "EmployeePersonalNumber",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "Level",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "TargetLevel",
+    "IS_NULLABLE": "YES"
+  },
+  {
+    "COLUMN_NAME": "AssessmentDate",
+    "IS_NULLABLE": "NO"
+  },
+  {
+    "COLUMN_NAME": "NextReviewDate",
+    "IS_NULLABLE": "YES"
+  },
+  {
+    "COLUMN_NAME": "AssessorName",
+    "IS_NULLABLE": "YES"
+  },
+  {
+    "COLUMN_NAME": "Notes",
+    "IS_NULLABLE": "YES"
+  }
+]
