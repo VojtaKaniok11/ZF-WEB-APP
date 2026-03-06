@@ -26,23 +26,22 @@ export async function GET(
 
         const result = await req.query(`
             SELECT
+                r.ID                                            AS sessionId,
                 t.ID                                            AS trainingId,
-                ts.ID                                           AS sessionId,
                 t.Name                                          AS trainingName,
-                t.Category                                      AS category,
-                t.ValidityMonths                                AS periodicityMonths,
-                CONVERT(varchar(10), ts.SessionDate, 23)        AS completedDate,
-                ISNULL(CONVERT(varchar(10), tp.ExpirationDateOverride, 23),
-                    CONVERT(varchar(10), DATEADD(MONTH, t.ValidityMonths, ts.SessionDate), 23)
-                )                                               AS expirationDate,
-                ISNULL(ts.TrainerName, '')                      AS trainerName,
-                ISNULL(tp.Status, '')                           AS statusOverride,
-                ISNULL(ts.Notes, '')                            AS notes
-            FROM dbo.TRAINING_ATTENDEES tp
-            JOIN dbo.TRAINING_SESSIONS ts     ON ts.ID = tp.SessionID
-            JOIN dbo.TRAININGS t              ON t.ID = ts.TrainingID
-            WHERE tp.PersonalNumber = @pn
-            ORDER BY ts.SessionDate DESC
+                c.Name                                          AS category,
+                t.PeriodicityMonths                             AS periodicityMonths,
+                CONVERT(varchar(10), r.CompletionDate, 23)      AS completedDate,
+                CONVERT(varchar(10), r.ExpirationDate, 23)      AS expirationDate,
+                'Autorizovaný lektor ZF'                        AS trainerName,
+                ''                                              AS statusOverride,
+                ''                                              AS notes
+            FROM dbo.TRAINING_RECORDS r
+            JOIN dbo.TRAININGS_CATALOG t ON t.ID = r.TrainingID
+            JOIN dbo.TRAINING_CATEGORIES c ON c.ID = t.CategoryID
+            JOIN dbo.EMPLOYEES e ON e.ID = r.EmployeeID
+            WHERE e.PersonalNumber = @pn
+            ORDER BY r.CompletionDate DESC, r.ID DESC
         `);
 
         const records = result.recordset.map((row) => {
