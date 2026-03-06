@@ -40,7 +40,7 @@ export default function Header() {
                 {/* Center — Title */}
                 <Link
                     href="/"
-                    className="absolute left-1/2 -translate-x-1/2 text-lg font-bold tracking-wide text-white sm:text-xl"
+                    className="absolute left-1/2 -translate-x-1/2 text-lg font-bold tracking-wide text-white sm:text-2xl"
                     id="header-title"
                 >
                     ZF HR Portal

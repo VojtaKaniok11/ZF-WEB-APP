@@ -28,7 +28,7 @@ export default function OoppClient({ employees }: OoppClientProps) {
                 actionButton={
                     <button
                         onClick={() => setModalOpen(true)}
-                        className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
+                        className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer"
                         style={{ backgroundColor: "#0054A6" }}
                     >
                         <Plus size={16} />

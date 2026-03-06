@@ -8,6 +8,7 @@ import type { EmployeeDetail } from "@/types/employee";
 import type { IluoLevel } from "@/types/iluo";
 
 interface IluoRecord {
+    assessmentId: string;
     skillId: string;
     skillName: string;
     workCenterId: string;
@@ -67,6 +68,14 @@ export default function IluoDetailPage() {
     const [printWorkCenterId, setPrintWorkCenterId] = useState("");
     const [printDateSince, setPrintDateSince] = useState("");
 
+    // Change status state
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [statusForm, setStatusForm] = useState({
+        assessmentId: "",
+        newLevel: "I" as IluoLevel
+    });
+
     useEffect(() => {
         if (!personalNumber) return;
         const pn = encodeURIComponent(personalNumber);
@@ -124,6 +133,33 @@ export default function IluoDetailPage() {
         }
     };
 
+    const handleChangeStatus = async () => {
+        if (!statusForm.assessmentId) return;
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`/api/iluo/${personalNumber}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    assessmentId: statusForm.assessmentId,
+                    newLevel: statusForm.newLevel,
+                }),
+            });
+
+            if (res.ok) {
+                // Refresh data
+                const iluoRes = await fetch(`/api/iluo/${personalNumber}`);
+                const iluoJson = await iluoRes.json();
+                if (iluoJson.success) setRecords(iluoJson.data);
+                setIsStatusModalOpen(false);
+            }
+        } catch (error) {
+            console.error("Chyba při změně stavu:", error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     if (isLoading) return (
         <div className="flex min-h-[60vh] items-center justify-center">
             <Loader2 size={32} className="animate-spin text-blue-500" />
@@ -168,16 +204,32 @@ export default function IluoDetailPage() {
                     <IluoBadge level="O" />
                 </div>
 
-                <button
-                    onClick={() => setIsPrintModalOpen(true)}
-                    className="flex items-center gap-2 rounded-xl bg-[#0054A6] px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-[#0054A6] focus:ring-offset-2"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="size-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0v3.396c0 .604.49 1.093 1.093 1.093h8.314c.604 0 1.093-.489 1.093-1.093V6.828Z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 6.828a2.25 2.25 0 0 0-2.25-2.25h-1.5a2.25 2.25 0 0 0-2.25 2.25v3.396h6V6.828Z" />
-                    </svg>
-                    Tisk PDF
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => {
+                            if (records.length > 0) {
+                                setStatusForm({
+                                    assessmentId: records[0].assessmentId,
+                                    newLevel: records[0].currentLevel
+                                });
+                            }
+                            setIsStatusModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 rounded-xl border border-blue bg-white px-5 py-3 text-sm font-semibold text-[#0054A6] shadow-sm transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
+                    >
+                        Změna stavu
+                    </button>
+                    <button
+                        onClick={() => setIsPrintModalOpen(true)}
+                        className="flex items-center gap-2 rounded-xl bg-[#0054A6] px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-[#0054A6] focus:ring-offset-2 cursor-pointer"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="size-5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0v3.396c0 .604.49 1.093 1.093 1.093h8.314c.604 0 1.093-.489 1.093-1.093V6.828Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 6.828a2.25 2.25 0 0 0-2.25-2.25h-1.5a2.25 2.25 0 0 0-2.25 2.25v3.396h6V6.828Z" />
+                        </svg>
+                        Tisk PDF
+                    </button>
+                </div>
             </div>
 
             {records.length === 0 ? (
@@ -269,6 +321,76 @@ export default function IluoDetailPage() {
                                     }`}
                             >
                                 Tisk
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modální dialog pro změnu stavu */}
+            {isStatusModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                        <h2 className="mb-6 text-xl font-bold text-gray-900">Změna stavu ILUO</h2>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Vyberte pracoviště/dovednost:
+                                </label>
+                                <select
+                                    value={statusForm.assessmentId}
+                                    onChange={(e) => {
+                                        const record = records.find(r => r.assessmentId === e.target.value);
+                                        setStatusForm({
+                                            assessmentId: e.target.value,
+                                            newLevel: record?.currentLevel || "I"
+                                        });
+                                    }}
+                                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-800 focus:border-[#0054A6] focus:outline-none focus:ring-1 focus:ring-[#0054A6]"
+                                >
+                                    {records.map(r => (
+                                        <option key={r.assessmentId} value={r.assessmentId}>
+                                            {r.workCenterName} – {r.skillName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-gray-700">
+                                    Nový stav (level):
+                                </label>
+                                <select
+                                    value={statusForm.newLevel}
+                                    onChange={(e) => setStatusForm({ ...statusForm, newLevel: e.target.value as IluoLevel })}
+                                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-800 focus:border-[#0054A6] focus:outline-none focus:ring-1 focus:ring-[#0054A6]"
+                                >
+                                    <option value="I">I – Začátečník</option>
+                                    <option value="L">L – Zácvik</option>
+                                    <option value="U">U – Samostatný pracovník</option>
+                                    <option value="O">O – Expert</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsStatusModalOpen(false)}
+                                className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+                            >
+                                Zrušit
+                            </button>
+                            <button
+                                onClick={handleChangeStatus}
+                                disabled={isSubmitting || !statusForm.assessmentId}
+                                className={`flex items-center gap-2 rounded-lg px-6 py-2 text-sm font-medium text-white transition-all ${isSubmitting || !statusForm.assessmentId
+                                    ? "cursor-not-allowed bg-gray-400"
+                                    : "bg-[#0054A6] shadow-md hover:bg-blue-700"
+                                    }`}
+                            >
+                                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                                Uložit změnu
                             </button>
                         </div>
                     </div>

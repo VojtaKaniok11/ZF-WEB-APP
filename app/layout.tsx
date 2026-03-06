@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
+import Watermark from "@/components/Watermark";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <Header />
         <main>{children}</main>
+        <Watermark />
       </body>
     </html>
   );

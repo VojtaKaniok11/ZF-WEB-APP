@@ -37,7 +37,7 @@ export async function GET(
         `);
 
         const records = result.recordset.map((row: Record<string, unknown>) => ({
-            assessmentId: row.assessmentId as string,
+            assessmentId: String(row.assessmentId),
             skillId: row.skillId as string,
             skillName: row.skillName as string,
             workCenterId: row.workCenterId as string,
@@ -55,5 +55,35 @@ export async function GET(
     } catch (err) {
         console.error("[GET /api/iluo/[pn]]", err);
         return NextResponse.json({ success: false, data: [] }, { status: 500 });
+    }
+}
+
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ personalNumber: string }> }
+) {
+    try {
+        const { assessmentId, newLevel } = await request.json();
+        if (assessmentId === undefined || assessmentId === null || !newLevel) {
+            return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
+        }
+
+        const db = await getPool();
+        const req = db.request();
+        // ID is NVARCHAR(50) in DB
+        req.input("id", sql.NVarChar(50), String(assessmentId));
+        req.input("level", sql.VarChar(10), newLevel);
+        req.input("date", sql.Date, new Date());
+
+        await req.query(`
+            UPDATE dbo.ILUO_ASSESSMENTS
+            SET Level = @level, AssessmentDate = @date
+            WHERE ID = @id
+        `);
+
+        return NextResponse.json({ success: true });
+    } catch (err) {
+        console.error("[PATCH /api/iluo/[pn]]", err);
+        return NextResponse.json({ success: false, error: "Database error" }, { status: 500 });
     }
 }
