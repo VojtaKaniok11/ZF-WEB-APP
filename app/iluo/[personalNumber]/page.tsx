@@ -110,7 +110,7 @@ export default function IluoDetailPage() {
             const element = document.getElementById("pdf-content");
             if (!element) return;
 
-            const opt = {
+            const opt: any = {
                 margin: 5,
                 filename: `kvalifikacni-karta-${employee?.personalNumber}.pdf`,
                 image: { type: "jpeg" as const, quality: 0.98 },

@@ -13,13 +13,17 @@ import FilterBar from "./FilterBar";
 import EmployeeTable from "./EmployeeTable";
 import AddEmployeeModal from "./AddEmployeeModal";
 
-export default function EmployeesPage() {
+interface EmployeesPageProps {
+    initialEmployees?: Employee[];
+}
+
+export default function EmployeesPage({ initialEmployees = [] }: EmployeesPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
     /* ---- State ---- */
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+    const [isLoading, setIsLoading] = useState(initialEmployees.length === 0);
 
     // Filters (initialized from URL query params)
     const [search, setSearch] = useState(searchParams.get("search") ?? "");

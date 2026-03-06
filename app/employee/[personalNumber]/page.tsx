@@ -9,16 +9,35 @@ import type { EmployeeMedicalRecord } from "@/types/medical";
 import type { EmployeeOoppRecord } from "@/types/oopp";
 import type { EmployeeIluoRecord } from "@/types/iluo";
 
-export default async function EmployeeProfilePage({ params }: { params: { personalNumber: string } }) {
-    const personalNumber = encodeURIComponent(params.personalNumber);
+import { headers } from "next/headers";
+
+export default async function EmployeeProfilePage({ params }: { params: Promise<{ personalNumber: string }> }) {
+    const { personalNumber: pnRaw } = await params;
+
+    // Safety check for 'undefined' string or empty param
+    if (!pnRaw || pnRaw === 'undefined') {
+        return (
+            <div className="mx-auto max-w-5xl px-4 py-12 text-center">
+                <p className="text-gray-500">Neplatné osobní číslo.</p>
+                <Link href="/" className="mt-4 inline-block text-sm text-blue-600 hover:underline">← Zpět na přehled</Link>
+            </div>
+        );
+    }
+
+    const personalNumber = encodeURIComponent(pnRaw);
+
+    // Get base URL for server-side fetch
+    const host = (await headers()).get("host");
+    const protocol = host?.includes("localhost") ? "http" : "https";
+    const baseUrl = `${protocol}://${host}`;
 
     // Server‑side fetch all related data
     const [empRes, trnRes, medRes, ooppRes, iluoRes] = await Promise.all([
-        fetch(`/api/employees/${personalNumber}`),
-        fetch(`/api/trainings/${personalNumber}`),
-        fetch(`/api/medical/${personalNumber}`),
-        fetch(`/api/oopp/${personalNumber}`),
-        fetch(`/api/iluo/${personalNumber}`),
+        fetch(`${baseUrl}/api/employees/${personalNumber}`),
+        fetch(`${baseUrl}/api/trainings/${personalNumber}`),
+        fetch(`${baseUrl}/api/medical/${personalNumber}`),
+        fetch(`${baseUrl}/api/oopp/${personalNumber}`),
+        fetch(`${baseUrl}/api/iluo/${personalNumber}`),
     ]);
 
     const empJson = await empRes.json();
@@ -32,10 +51,18 @@ export default async function EmployeeProfilePage({ params }: { params: { person
     }
     const employee: EmployeeDetail = empJson.data;
 
-    const trainings: EmployeeTrainingRecord[] = (await trnRes.json()).success ? (await trnRes.json()).data : [];
-    const medicals: EmployeeMedicalRecord[] = (await medRes.json()).success ? (await medRes.json()).data : [];
-    const oopp: EmployeeOoppRecord[] = (await ooppRes.json()).success ? (await ooppRes.json()).data : [];
-    const iluo: EmployeeIluoRecord[] = (await iluoRes.json()).success ? (await iluoRes.json()).data : [];
+    const trnJson = await trnRes.json();
+    const trainings: EmployeeTrainingRecord[] = trnJson.success ? trnJson.data : [];
+
+    const medJson = await medRes.json();
+    const medicals: EmployeeMedicalRecord[] = medJson.success ? medJson.data : [];
+
+    const ooppJson = await ooppRes.json();
+    const oopp: EmployeeOoppRecord[] = ooppJson.success ? ooppJson.data : [];
+
+    const iluoJson = await iluoRes.json();
+    const iluo: EmployeeIluoRecord[] = iluoJson.success ? iluoJson.data : [];
+
 
     function formatDate(d: string | null): string {
         if (!d) return "—";
