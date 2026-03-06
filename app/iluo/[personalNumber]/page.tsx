@@ -113,9 +113,9 @@ export default function IluoDetailPage() {
             const opt = {
                 margin: 5,
                 filename: `kvalifikacni-karta-${employee?.personalNumber}.pdf`,
-                image: { type: "jpeg", quality: 0.98 },
+                image: { type: "jpeg" as const, quality: 0.98 },
                 html2canvas: { scale: 3, useCORS: true },
-                jsPDF: { unit: "mm", format: "a5", orientation: "landscape" }
+                jsPDF: { unit: "mm", format: "a5", orientation: "landscape" as const }
             };
 
             await html2pdf().set(opt).from(element).save();
