@@ -56,6 +56,9 @@ export default function EmployeeTable({
                             <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Stav
                             </th>
+                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                Prací program
+                            </th>
                             <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Akce
                             </th>
@@ -89,6 +92,13 @@ export default function EmployeeTable({
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-3.5">
                                     <StatusBadge isActive={emp.isActive} />
+                                </td>
+                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-700 font-medium">
+                                    {emp.hasWashingProgram ? (
+                                        <span className="inline-flex items-center rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">Ano</span>
+                                    ) : (
+                                        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Ne</span>
+                                    )}
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                     <button

@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
         const search = searchParams.get("search") ?? "";
         const dept = searchParams.get("dept") ?? "";
         const status = searchParams.get("status") ?? "";
+        const wp = searchParams.get("wp") ?? "";
 
         const db = await getPool();  // HR database
         const req = db.request();
@@ -31,6 +32,11 @@ export async function GET(request: NextRequest) {
         } else if (status === "inactive") {
             where += " AND e.IsActive = 0";
         }
+        if (wp === "yes") {
+            where += " AND e.HasWashingProgram = 1";
+        } else if (wp === "no") {
+            where += " AND e.HasWashingProgram = 0";
+        }
 
         // Cross-database JOIN: HR.dbo.EMPLOYEES ← USER_MANAGEMENT.dbo.USERS
         // Propojení přes BIS_Osoba_ID, aby jsme měli login, email a číslo karty
@@ -45,6 +51,7 @@ export async function GET(request: NextRequest) {
                 ISNULL(e.Workcenter, '')                   AS workcenter,
                 e.HiringDate                               AS hiringDate,
                 ISNULL(e.IsActive, 0)                      AS isActive,
+                ISNULL(e.HasWashingProgram, 0)             AS hasWashingProgram,
                 e.Photo                                    AS photo,
                 -- Obohacení z USER_MANAGEMENT (identity zdroj)
                 ISNULL(u.User_Name, '')                    AS userName,

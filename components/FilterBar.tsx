@@ -7,9 +7,11 @@ interface FilterBarProps {
     search: string;
     department: string;
     status: string;
+    wp: string;
     onSearchChange: (value: string) => void;
     onDepartmentChange: (value: string) => void;
     onStatusChange: (value: string) => void;
+    onWpChange: (value: string) => void;
     onSubmit: () => void;
 }
 
@@ -17,9 +19,11 @@ export default function FilterBar({
     search,
     department,
     status,
+    wp,
     onSearchChange,
     onDepartmentChange,
     onStatusChange,
+    onWpChange,
     onSubmit,
 }: FilterBarProps) {
     return (
@@ -28,7 +32,7 @@ export default function FilterBar({
                 <SlidersHorizontal size={16} />
                 Filtry
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                 {/* Search */}
                 <div className="relative">
                     <Search
@@ -70,6 +74,17 @@ export default function FilterBar({
                     <option value="">Všichni</option>
                     <option value="true">Aktivní</option>
                     <option value="false">Neaktivní</option>
+                </select>
+
+                {/* Washing program */}
+                <select
+                    value={wp}
+                    onChange={(e) => onWpChange(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                    <option value="">Prací program: Vše</option>
+                    <option value="yes">Prací program: Ano</option>
+                    <option value="no">Prací program: Ne</option>
                 </select>
             </div>
         </div>

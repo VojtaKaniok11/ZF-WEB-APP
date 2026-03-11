@@ -31,6 +31,7 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
         searchParams.get("dept") ?? ""
     );
     const [status, setStatus] = useState(searchParams.get("status") ?? "");
+    const [wp, setWp] = useState(searchParams.get("wp") ?? "");
 
     // Modals
     const [showAddModal, setShowAddModal] = useState(false);
@@ -43,6 +44,7 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
             if (search) params.set("search", search);
             if (department) params.set("dept", department);
             if (status) params.set("status", status);
+            if (wp) params.set("wp", wp);
 
             const qs = params.toString();
             const res = await fetch(`/api/employees${qs ? `?${qs}` : ""}`);
@@ -56,7 +58,7 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
         } finally {
             setIsLoading(false);
         }
-    }, [search, department, status]);
+    }, [search, department, status, wp]);
 
     // Initial load
     useEffect(() => {
@@ -64,15 +66,17 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
     }, [fetchEmployees]);
 
     /* ---- Filter actions ---- */
-    function applyFilters(newSearch?: string, newDept?: string, newStatus?: string) {
+    function applyFilters(newSearch?: string, newDept?: string, newStatus?: string, newWp?: string) {
         const params = new URLSearchParams();
         const s = newSearch !== undefined ? newSearch : search;
         const d = newDept !== undefined ? newDept : department;
         const st = newStatus !== undefined ? newStatus : status;
+        const w = newWp !== undefined ? newWp : wp;
 
         if (s) params.set("search", s);
         if (d) params.set("dept", d);
         if (st) params.set("status", st);
+        if (w) params.set("wp", w);
 
         const qs = params.toString();
         const newUrl = qs ? `/?${qs}` : "/";
@@ -87,11 +91,15 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
     const handleSearchChange = (val: string) => setSearch(val);
     const handleDepartmentChange = (val: string) => {
         setDepartment(val);
-        applyFilters(search, val, status);
+        applyFilters(search, val, status, wp);
     };
     const handleStatusChange = (val: string) => {
         setStatus(val);
-        applyFilters(search, department, val);
+        applyFilters(search, department, val, wp);
+    };
+    const handleWpChange = (val: string) => {
+        setWp(val);
+        applyFilters(search, department, status, val);
     };
 
     /* ---- Save new employee ---- */
@@ -134,9 +142,11 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
                     search={search}
                     department={department}
                     status={status}
+                    wp={wp}
                     onSearchChange={handleSearchChange}
                     onDepartmentChange={handleDepartmentChange}
                     onStatusChange={handleStatusChange}
+                    onWpChange={handleWpChange}
                     onSubmit={() => applyFilters()}
                 />
 

@@ -7,6 +7,7 @@ export interface Employee {
     costCenter: string;
     hiringDate: string | null;
     isActive: boolean;
+    hasWashingProgram: boolean;
 }
 
 export interface PositionHistoryItem {

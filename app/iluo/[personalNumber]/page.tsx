@@ -234,7 +234,10 @@ export default function IluoDetailPage() {
 
             {records.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white py-16 shadow-sm">
-                    <p className="text-sm text-gray-400">Žádné záznamy ILUO.</p>
+                    <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
+                        Člověk v zácviku bez záznamu
+                    </span>
+                    <p className="text-sm text-gray-400 mt-3">Zaměstnanec zatím neabsolvoval žádné testy zručnosti.</p>
                 </div>
             ) : (
                 Object.entries(grouped).map(([wcName, skills]) => (
@@ -449,12 +452,18 @@ export default function IluoDetailPage() {
 
                         {/* Tělo tabulky */}
                         <div className="text-[12px] font-bold flex flex-col divide-y divide-[#d1d5db]">
-                            {records.map((r, i) => (
-                                <div key={i} className="flex items-center justify-between px-3 pt-[4px] pb-[6px] bg-[#fdfdfd]">
-                                    <span className="uppercase text-[#1f2937] leading-none">{r.workCenterName}</span>
-                                    <span className="uppercase text-[#1f2937] leading-none w-[25mm] text-center">{r.currentLevel}</span>
+                            {records.length === 0 ? (
+                                <div className="flex items-center justify-center px-3 py-4 bg-[#fdfdfd]">
+                                    <span className="uppercase text-[#1f2937] text-[14px]">Člověk v zácviku bez záznamu</span>
                                 </div>
-                            ))}
+                            ) : (
+                                records.map((r, i) => (
+                                    <div key={i} className="flex items-center justify-between px-3 pt-[4px] pb-[6px] bg-[#fdfdfd]">
+                                        <span className="uppercase text-[#1f2937] leading-none">{r.workCenterName}</span>
+                                        <span className="uppercase text-[#1f2937] leading-none w-[25mm] text-center">{r.currentLevel}</span>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 

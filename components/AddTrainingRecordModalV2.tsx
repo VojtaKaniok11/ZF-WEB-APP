@@ -21,11 +21,12 @@ interface Props {
 
 export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths, employees, onClose, onSaved }: Props) {
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedEmp, setSelectedEmp] = useState<EmployeeMin | null>(null);
+    const [selectedEmps, setSelectedEmps] = useState<EmployeeMin[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     // Default to today
     const [completionDate, setCompletionDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [isLegalOrExternal, setIsLegalOrExternal] = useState(false);
 
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -52,8 +53,8 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
     }, []);
 
     const handleSave = async () => {
-        if (!selectedEmp) {
-            setError("Musíte vybrat zaměstnance.");
+        if (selectedEmps.length === 0) {
+            setError("Musíte vybrat alespoň jednoho zaměstnance.");
             return;
         }
         if (!completionDate) {
@@ -69,9 +70,10 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    employeeId: selectedEmp.employeeId,
+                    employeeIds: selectedEmps.map(e => e.employeeId),
                     trainingId,
-                    completionDate
+                    completionDate,
+                    isLegalOrExternal
                 })
             });
 
@@ -131,7 +133,6 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
                                 onChange={(e) => {
                                     setSearchQuery(e.target.value);
                                     setIsDropdownOpen(true);
-                                    if (selectedEmp) setSelectedEmp(null);
                                 }}
                                 onFocus={() => setIsDropdownOpen(true)}
                             />
@@ -150,14 +151,18 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            setSelectedEmp(emp);
-                                                            setSearchQuery(`${emp.firstName} ${emp.lastName}`);
-                                                            setIsDropdownOpen(false);
+                                                            const isSelected = selectedEmps.some(e => e.employeeId === emp.employeeId);
+                                                            if (isSelected) {
+                                                                setSelectedEmps(prev => prev.filter(e => e.employeeId !== emp.employeeId));
+                                                            } else {
+                                                                setSelectedEmps(prev => [...prev, emp]);
+                                                            }
+                                                            setSearchQuery("");
                                                         }}
-                                                        className={`w-full text-left flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${selectedEmp?.employeeId === emp.employeeId ? 'bg-blue-50/70' : ''}`}
+                                                        className={`w-full text-left flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${(selectedEmps.some(e => e.employeeId === emp.employeeId)) ? 'bg-blue-50/70' : ''}`}
                                                     >
-                                                        <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-all ${selectedEmp?.employeeId === emp.employeeId ? "border-blue-600 bg-blue-600" : "border-gray-300 bg-white"}`}>
-                                                            {selectedEmp?.employeeId === emp.employeeId && <Check size={12} strokeWidth={3} className="text-white" />}
+                                                        <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-all ${(selectedEmps.some(e => e.employeeId === emp.employeeId)) ? "border-blue-600 bg-blue-600" : "border-gray-300 bg-white"}`}>
+                                                            {(selectedEmps.some(e => e.employeeId === emp.employeeId)) && <Check size={12} strokeWidth={3} className="text-white" />}
                                                         </span>
                                                         <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-xs font-bold text-blue-700">
                                                             {emp.firstName.charAt(0)}{emp.lastName.charAt(0)}
@@ -178,6 +183,24 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
                                 </div>
                             )}
                         </div>
+
+                        {/* Selected Employees Chips */}
+                        {selectedEmps.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {selectedEmps.map(emp => (
+                                    <span key={emp.employeeId} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                        {emp.firstName} {emp.lastName}
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setSelectedEmps(prev => prev.filter(e => e.employeeId !== emp.employeeId))}
+                                            className="ml-0.5 rounded-full bg-blue-100 p-0.5 text-blue-500 hover:bg-blue-200 hover:text-blue-700 transition-colors"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Date Picker */}
@@ -194,6 +217,28 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
                         />
                         <p className="mt-2 text-xs text-gray-500 leading-relaxed">
                             Platnost tohoto školení je <strong>{periodicityMonths} měsíců</strong>. Systém automaticky vypočítá datum expirace na základě data absolvování.
+                        </p>
+                    </div>
+
+                    {/* Legal/External Switch */}
+                    <div className="relative z-30 pt-2">
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <div className="relative flex items-center justify-center">
+                                <input
+                                    type="checkbox"
+                                    checked={isLegalOrExternal}
+                                    onChange={(e) => setIsLegalOrExternal(e.target.checked)}
+                                    className="peer sr-only"
+                                />
+                                <div className="h-6 w-11 rounded-full bg-gray-200 transition-colors peer-checked:bg-blue-600 peer-focus:ring-2 peer-focus:ring-blue-500/30"></div>
+                                <div className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-5"></div>
+                            </div>
+                            <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">
+                                Zákonné / Externí školení
+                            </span>
+                        </label>
+                        <p className="mt-1.5 pl-14 text-xs text-gray-500">
+                            Zaškrtnutím označíte, že je toto školení vyžadováno zákonem, nebo probíhá přes externí subjekt.
                         </p>
                     </div>
 

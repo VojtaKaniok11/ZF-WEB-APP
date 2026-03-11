@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getPool } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { getPool, sql } from "@/lib/db";
 
 export async function GET() {
     try {
@@ -23,5 +23,38 @@ export async function GET() {
     } catch (err) {
         console.error("[GET /api/trainings-v2]", err);
         return NextResponse.json({ success: false, message: "Chyba při načítání katalogu." }, { status: 500 });
+    }
+}
+
+export async function POST(request: NextRequest) {
+    try {
+        const body = await request.json();
+        
+        const categoryId = parseInt(body.categoryId, 10);
+        const name = body.name?.trim();
+        const periodicityMonths = parseInt(body.periodicityMonths, 10);
+        
+        // Validation
+        if (!name || isNaN(categoryId) || isNaN(periodicityMonths)) {
+            return NextResponse.json({ success: false, message: "Chybí povinné údaje pro vytvoření školení." }, { status: 400 });
+        }
+
+        const db = await getPool();
+        const req = db.request();
+
+        req.input("catId", sql.Int, categoryId);
+        req.input("name", sql.NVarChar, name);
+        req.input("desc", sql.NVarChar, body.description || "");
+        req.input("period", sql.Int, periodicityMonths);
+
+        await req.query(`
+            INSERT INTO dbo.TRAININGS_CATALOG (CategoryID, Name, Description, PeriodicityMonths)
+            VALUES (@catId, @name, @desc, @period)
+        `);
+
+        return NextResponse.json({ success: true });
+    } catch (err) {
+        console.error("[POST /api/trainings-v2]", err);
+        return NextResponse.json({ success: false, message: "Chyba při ukládání školení." }, { status: 500 });
     }
 }

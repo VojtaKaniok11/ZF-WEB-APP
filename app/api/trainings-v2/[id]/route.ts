@@ -47,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 CAST(ISNULL(tr.HasCompleted, 0) AS BIT) as hasCompleted,
                 tr.CompletionDate as completionDate,
                 tr.ExpirationDate as expirationDate,
+                CAST(ISNULL(tr.IsLegalOrExternal, 0) AS BIT) as isLegalOrExternal,
                 CASE
                     WHEN tr.HasCompleted IS NULL THEN 'Neproškolen'
                     WHEN tr.ExpirationDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné'
@@ -58,7 +59,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 SELECT TOP 1 
                     1 as HasCompleted,
                     r.CompletionDate, 
-                    r.ExpirationDate
+                    r.ExpirationDate,
+                    r.IsLegalOrExternal
                 FROM dbo.TRAINING_RECORDS r
                 WHERE r.EmployeeID = e.ID AND r.TrainingID = @tid
                 ORDER BY r.CompletionDate DESC, r.ID DESC

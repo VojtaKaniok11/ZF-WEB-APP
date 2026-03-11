@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronRight, GraduationCap } from "lucide-react";
+import { Search, ChevronRight, GraduationCap, Download, Loader2, Plus } from "lucide-react";
 import TrainingDetailModalV2 from "./TrainingDetailModalV2";
+import AddNewTrainingModalV2 from "./AddNewTrainingModalV2";
 
 export interface TrainingV2 {
     id: number;
@@ -18,8 +19,18 @@ export default function TrainingsClientV2() {
     const [loading, setLoading] = useState(true);
     const [selectedTrainingId, setSelectedTrainingId] = useState<number | null>(null);
     const [search, setSearch] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
+    const [exportFilter, setExportFilter] = useState("all");
+    const [exporting, setExporting] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
 
-    useEffect(() => {
+    const categories = useMemo(() => {
+        const cats = new Set(trainings.map((t) => t.categoryName));
+        return ["Vše", ...Array.from(cats)].sort();
+    }, [trainings]);
+
+    const loadTrainings = () => {
+        setLoading(true);
         fetch("/api/trainings-v2")
             .then((res) => res.json())
             .then((data) => {
@@ -32,17 +43,55 @@ export default function TrainingsClientV2() {
                 console.error(err);
                 setLoading(false);
             });
+    };
+
+    useEffect(() => {
+        loadTrainings();
     }, []);
 
     const filtered = useMemo(() => {
-        if (!search) return trainings;
-        const s = search.toLowerCase();
-        return trainings.filter(
-            (t) =>
-                t.name.toLowerCase().includes(s) ||
-                t.categoryName.toLowerCase().includes(s)
-        );
-    }, [trainings, search]);
+        let res = trainings;
+        
+        if (selectedCategory !== "Vše") {
+            res = res.filter((t) => t.categoryName === selectedCategory);
+        }
+        
+        if (search) {
+            const s = search.toLowerCase();
+            res = res.filter(
+                (t) =>
+                    t.name.toLowerCase().includes(s) ||
+                    t.categoryName.toLowerCase().includes(s)
+            );
+        }
+        
+        return res;
+    }, [trainings, search, selectedCategory]);
+
+    const handleExport = async () => {
+        try {
+            setExporting(true);
+            const response = await fetch(`/api/trainings-v2/export?filter=${exportFilter}&category=${encodeURIComponent(selectedCategory)}`);
+            if (!response.ok) throw new Error("Chyba při stahování Excelu.");
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            a.download = `katalog_skoleni_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error("Export selhal:", error);
+            alert("Export do Excelu se nezdařil.");
+        } finally {
+            setExporting(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -68,25 +117,65 @@ export default function TrainingsClientV2() {
                 </div>
             </div>
 
-            {/* Search */}
-            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="relative">
+            {/* Search and Filters */}
+            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Hledat školení podle názvu nebo kategorie..."
+                        placeholder="Hledat školení podle názvu..."
                         className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                 </div>
+                <div className="sm:w-64 shrink-0">
+                    <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 px-4 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                        {categories.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
-            {/* Count badge */}
-            <div className="mb-4 flex items-center justify-between gap-2">
+            {/* Count badge & Export */}
+            <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
                     Nalezeno: {filtered.length} školení
                 </span>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <select
+                        value={exportFilter}
+                        onChange={(e) => setExportFilter(e.target.value)}
+                        className="rounded-lg border border-gray-300 bg-white py-2.5 px-4 text-sm text-gray-700 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-600/20 w-full sm:w-auto shadow-sm transition-colors"
+                    >
+                        <option value="all">Exportovat všechna data</option>
+                        <option value="expiring">Exportovat prošlá a končící v příštích 30 dnech</option>
+                    </select>
+                    <button
+                        onClick={handleExport}
+                        disabled={exporting}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed shrink-0 cursor-pointer"
+                    >
+                        {exporting ? (
+                            <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                            <Download size={16} />
+                        )}
+                        Export Excel
+                    </button>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0054A6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer shrink-0"
+                    >
+                        <Plus size={16} />
+                        Přidat školení
+                    </button>
+                </div>
             </div>
 
             {/* List */}
@@ -141,6 +230,16 @@ export default function TrainingsClientV2() {
                 trainingId={selectedTrainingId}
                 onClose={() => setSelectedTrainingId(null)}
             />
+
+            {showCreateModal && (
+                <AddNewTrainingModalV2
+                    onClose={() => setShowCreateModal(false)}
+                    onSaved={() => {
+                        setShowCreateModal(false);
+                        loadTrainings();
+                    }}
+                />
+            )}
         </div>
     );
 }

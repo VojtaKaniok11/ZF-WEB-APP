@@ -12,6 +12,7 @@ interface PersonListProps {
     description: string;
     icon: React.ReactNode;
     actionButton?: React.ReactNode;
+    filterControls?: React.ReactNode;
 }
 
 export default function PersonList({
@@ -21,6 +22,7 @@ export default function PersonList({
     description,
     icon,
     actionButton,
+    filterControls,
 }: PersonListProps) {
     const [search, setSearch] = useState("");
 
@@ -64,11 +66,17 @@ export default function PersonList({
             </div>
 
             {/* Count badge + optional action button */}
-            <div className="mb-4 flex items-center justify-between gap-2">
-                <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                    Nalezeno: {filtered.length} zaměstnanců
-                </span>
-                {actionButton && <div>{actionButton}</div>}
+            <div className="mb-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                <div className="shrink-0">
+                    <span className="whitespace-nowrap inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                        Nalezeno: {filtered.length} zaměstnanců
+                    </span>
+                </div>
+                
+                <div className="flex flex-wrap items-center xl:justify-end gap-2 xl:flex-nowrap overflow-hidden">
+                    {filterControls && <div className="flex items-center w-full sm:w-auto overflow-hidden">{filterControls}</div>}
+                    {actionButton && <div className="flex items-center gap-2 shrink-0">{actionButton}</div>}
+                </div>
             </div>
 
             {/* List */}
