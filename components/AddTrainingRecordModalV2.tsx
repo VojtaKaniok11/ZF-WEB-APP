@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { X, Search, Check, Loader2 } from "lucide-react";
+import { getApiUrl } from "@/lib/constants";
 
 interface EmployeeMin {
     employeeId: number;
@@ -64,9 +65,10 @@ export default function AddTrainingRecordModalV2({ trainingId, periodicityMonths
 
         setSaving(true);
         setError("");
+        const apiUrl = getApiUrl();
 
         try {
-            const res = await fetch("/api/trainings-v2/records", {
+            const res = await fetch(`${apiUrl}/trainings-v2/records`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

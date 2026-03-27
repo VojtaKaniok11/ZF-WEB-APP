@@ -4,15 +4,16 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, Check, UserCheck, Loader2 } from "lucide-react";
 import { Employee } from "@/types/employee";
+import { getApiUrl } from "@/lib/constants";
 
 const RESULTS = ["Způsobilý", "Nezpůsobilý", "Způsobilý s podmínkou"] as const;
 
 interface ExamType {
-    ID: string;
-    Name: string;
-    ValidityMonths: number;
-    Category: string;
-    Description: string | null;
+    id: string;
+    name: string;
+    validityMonths: number;
+    category: string;
+    description: string | null;
 }
 
 interface AddMedicalModalProps {
@@ -44,7 +45,8 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        fetch("/api/medical-types")
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/medical-types`)
             .then(res => res.json())
             .then(json => {
                 if (json.success) {
@@ -58,10 +60,10 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
     useEffect(() => {
         if (examDate && examTypeName) {
             // Try to find the period by exact name match
-            const type = examTypes.find(t => t.Name === examTypeName || t.ID === examTypeName);
-            if (type && type.ValidityMonths > 0) {
+            const type = examTypes.find(t => t.name === examTypeName || t.id === examTypeName);
+            if (type && type.validityMonths > 0) {
                 const date = new Date(examDate);
-                date.setMonth(date.getMonth() + type.ValidityMonths);
+                date.setMonth(date.getMonth() + type.validityMonths);
                 setNextExamDate(date.toISOString().split("T")[0]);
             } else {
                 setNextExamDate("");
@@ -121,11 +123,11 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
         if (Object.keys(e).length > 0) return;
 
         // Try to identify if the typed name matches a known ID
-        const matchedType = examTypes.find(t => t.Name === examTypeName || t.ID === examTypeName);
+        const matchedType = examTypes.find(t => t.name === examTypeName || t.id === examTypeName);
 
         const input = {
             examTypeName: examTypeName.trim(),
-            examTypeId: matchedType?.ID || null, // Send ID if we matched, else null (backend will handle creating)
+            examTypeId: matchedType?.id || null, // Send id if we matched, else null (backend will handle creating)
             examDate,
             nextExamDate,
             doctorName: doctorName.trim(),
@@ -135,8 +137,9 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
         };
 
         setIsSaving(true);
+        const apiUrl = getApiUrl();
         try {
-            const res = await fetch("/api/medical", {
+            const res = await fetch(`${apiUrl}/medical`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(input),
@@ -215,7 +218,7 @@ export default function AddMedicalModal({ employees, onClose, onSuccess }: AddMe
                                     />
                                     <datalist id="exam-types-list">
                                         {examTypes.map((t) => (
-                                            <option key={t.ID} value={t.Name} />
+                                            <option key={t.id} value={t.name} />
                                         ))}
                                     </datalist>
                                     {errors.examTypeName && <p className="mt-1 text-xs text-red-500">{errors.examTypeName}</p>}

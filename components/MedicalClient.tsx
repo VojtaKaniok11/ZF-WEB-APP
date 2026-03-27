@@ -4,11 +4,13 @@ import { useState, useEffect, useMemo } from "react";
 import { Employee } from "@/types/employee";
 import PersonList from "@/components/PersonList";
 import AddMedicalModal from "@/components/AddMedicalModal";
-import { Plus, Filter, Download, Loader2 } from "lucide-react";
+import { Plus, Download, Loader2 } from "lucide-react";
+import * as xlsx from "xlsx";
+import { getApiUrl } from "@/lib/constants";
 
 interface MedicalType {
-    ID: string;
-    Name: string;
+    id: string;
+    name: string;
 }
 
 interface MedicalSummaryItem {
@@ -37,20 +39,45 @@ export default function MedicalClient({ employees }: MedicalClientProps) {
     const handleExport = async () => {
         try {
             setExporting(true);
-            const response = await fetch(`/api/medical/export?typeId=${encodeURIComponent(filterTypeId)}&status=${encodeURIComponent(filterStatus)}`);
-            if (!response.ok) throw new Error("Chyba při stahování Excelu.");
             
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = url;
-            a.download = `lekarske_prohlidky_${new Date().toISOString().split('T')[0]}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
+            const data = filteredEmployees.map(emp => {
+                const record = summary.find(s => s.personalNumber === emp.personalNumber && s.examTypeId === filterTypeId);
+                const typeName = types.find(t => t.id === filterTypeId)?.name || "Všechny prohlídky";
+                
+                let currentStatus = "Neproškolen";
+                if (record) {
+                    if (record.status === "valid") currentStatus = "Platné";
+                    else if (record.status === "expiring_soon") currentStatus = "Blíží se expirace";
+                    else currentStatus = "Neplatné";
+                }
+
+                return {
+                    'Příjmení a jméno': `${emp.lastName} ${emp.firstName}`,
+                    'Osobní číslo': emp.personalNumber || '',
+                    'Oddělení': emp.department || '',
+                    'Název prohlídky': typeName,
+                    'Stav': currentStatus
+                };
+            });
+
+            const ws = xlsx.utils.json_to_sheet(data.length > 0 ? data : [{ 'Informace': 'Žádná data neodpovídají zvolenému filtru.' }]);
             
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+            if (data.length > 0) {
+                ws['!cols'] = [
+                    { wch: 25 },
+                    { wch: 15 },
+                    { wch: 25 },
+                    { wch: 30 },
+                    { wch: 18 }
+                ];
+            }
+
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, "Lékařské prohlídky");
+            
+            const fileName = `lekarske_prohlidky_${new Date().toISOString().split('T')[0]}.xlsx`;
+            xlsx.writeFile(wb, fileName);
+            
         } catch (error) {
             console.error("Export selhal:", error);
             alert("Export do Excelu se nezdařil.");
@@ -58,66 +85,51 @@ export default function MedicalClient({ employees }: MedicalClientProps) {
             setExporting(false);
         }
     };
-    
-
 
     useEffect(() => {
+        const apiUrl = getApiUrl();
         // Fetch types
-        fetch("/api/medical-types")
+        fetch(`${apiUrl}/medical-types`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) setTypes(data.data);
-            });
+            })
+            .catch(() => {});
 
         // Fetch summary
-        fetch("/api/medical/summary")
+        fetch(`${apiUrl}/medical/summary`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) setSummary(data.data);
-            });
+            })
+            .catch(() => {});
     }, []);
 
     const filteredEmployees = useMemo(() => {
-        if (filterTypeId === "Vše" && filterStatus === "Vše") {
-            return employees;
-        }
-
         return employees.filter(emp => {
-            // Find employee's status for the selected type
-            // If filterTypeId is "Vše" but filterStatus is not (doesn't make much sense, but we can handle it)
-            // Actually, we force filtering by status only if a type is selected, or we check ALL their exams?
-            // Usually, "platné/neplatné" is tied to a SPECIFIC exam.
+            const userRecords = summary.filter(s => s.personalNumber === emp.personalNumber);
+            const matchesType = filterTypeId === "Vše" || userRecords.some(r => r.examTypeId === filterTypeId);
+            
+            if (!matchesType && filterTypeId !== "Vše") return false;
 
-            // If no specific exam type is selected, we could arguably ignore the status filter or check overall status.
-            // Let's assume you must pick a specific exam for status to matter, OR if no exam is picked, 'Platné' means ALL their exams are valid... this is complex.
-            // Let's implement simpler logic: if filterTypeId !== "Vše", we look up that specific exam.
-
+            let currentStatus = "Neproškolen";
             if (filterTypeId !== "Vše") {
-                const record = summary.find(s => s.personalNumber === emp.personalNumber && s.examTypeId === filterTypeId);
-                let currentStatus = "Neproškolen"; // treating no record as not having it (invalid)
-                if (record) {
-                    if (record.status === "valid") currentStatus = "Platné";
-                    else if (record.status === "expiring_soon") currentStatus = "Blíží se expirace";
-                    else currentStatus = "Neplatné"; // expired
+                const typeRecord = userRecords.find(r => r.examTypeId === filterTypeId);
+                if (typeRecord) {
+                    if (typeRecord.status === "valid") currentStatus = "Platné";
+                    else if (typeRecord.status === "expiring_soon") currentStatus = "Blíží se expirace";
+                    else if (typeRecord.status === "expired") currentStatus = "Neplatné";
                 }
-
-                if (filterStatus !== "Vše") {
-                    if (filterStatus === "Neplatné" && currentStatus === "Neproškolen") return true; // Neproškolen counts as Neplatné
-                    return currentStatus === filterStatus;
-                }
-
-                // If only type is filtered, maybe show everyone, or only those who have it?
-                // Let's show everyone, as the user wants to filter BY TYPE AND STATUS. If status="Vše", everyone passes.
-                return true;
+            } else if (userRecords.length > 0) {
+                if (userRecords.some(r => r.status === "expired")) currentStatus = "Neplatné";
+                else if (userRecords.some(r => r.status === "expiring_soon")) currentStatus = "Blíží se expirace";
+                else currentStatus = "Platné";
             }
 
-            // If type==="Vše" but status is specific
             if (filterStatus !== "Vše") {
-                // If someone wants "Platné", maybe they want employees where ALL exams are valid.
-                // It's undefined behavior based on UI simplicity. Let's just return true if examType = "Vše"
-                return true;
+                if (filterStatus === "Neplatné") return currentStatus === "Neplatné" || currentStatus === "Neproškolen";
+                return currentStatus === filterStatus;
             }
-
             return true;
         });
     }, [employees, filterTypeId, filterStatus, summary]);
@@ -170,7 +182,7 @@ export default function MedicalClient({ employees }: MedicalClientProps) {
                         >
                             <option value="Vše">Všechny prohlídky</option>
                             {types.map(t => (
-                                <option key={t.ID} value={t.ID}>{t.Name}</option>
+                                <option key={t.id} value={t.id}>{t.name}</option>
                             ))}
                         </select>
                         <select

@@ -1,15 +1,32 @@
-import { headers } from "next/headers";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Employee } from "@/types/employee";
 import OoppClient from "@/components/OoppClient";
+import { getApiUrl } from "@/lib/constants";
 
-export default async function OoppPage() {
-    const host = (await headers()).get("host");
-    const protocol = host?.includes("localhost") ? "http" : "https";
-    const baseUrl = `${protocol}://${host}`;
+export default function OoppPage() {
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const res = await fetch(`${baseUrl}/api/employees`, { cache: "no-store" });
-    const json = (await res.json()) as { success: boolean; data: Employee[] };
-    const employees = json.success ? json.data : [];
+    useEffect(() => {
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/employees`)
+            .then(res => res.json())
+            .then(json => {
+                if (json.success) setEmployees(json.data);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <p className="text-gray-400">Načítám...</p>
+            </div>
+        );
+    }
 
     return <OoppClient employees={employees} />;
 }

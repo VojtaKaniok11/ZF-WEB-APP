@@ -30,5 +30,18 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "check-*.ts",
+    "check-*.tsx",
+    "check-*.mjs",
+    "test-*.ts",
+    "cleanup-*.ts",
+    "debug-*.ts",
+    "list-*.ts",
+    "mark-*.ts",
+    "sync-*.ts",
+    "verify-*.ts",
+    "compare-*.ts"
+  ]
 }

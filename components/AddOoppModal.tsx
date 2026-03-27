@@ -4,11 +4,12 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, Check, UserCheck, Loader2 } from "lucide-react";
 import { Employee } from "@/types/employee";
+import { getApiUrl } from "@/lib/constants";
 
 interface OoppItem {
-    ID: string;
-    Name: string;
-    Category: string;
+    id: string;
+    name: string;
+    category: string;
 }
 
 interface AddOoppModalProps {
@@ -42,7 +43,8 @@ export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppM
 
     // Načti katalog OOPP z API
     useEffect(() => {
-        fetch("/api/oopp")
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/oopp`)
             .then((r) => r.json())
             .then((json) => { if (json.success) setOoppItems(json.data); })
             .catch(() => { });
@@ -99,8 +101,9 @@ export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppM
         if (Object.keys(e).length > 0) return;
 
         setIsSaving(true);
+        const apiUrl = getApiUrl();
         try {
-            const res = await fetch("/api/oopp", {
+            const res = await fetch(`${apiUrl}/oopp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -132,8 +135,8 @@ export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppM
     const groupedItems = useMemo(() => {
         const groups: Record<string, OoppItem[]> = {};
         for (const item of ooppItems) {
-            if (!groups[item.Category]) groups[item.Category] = [];
-            groups[item.Category].push(item);
+            if (!groups[item.category]) groups[item.category] = [];
+            groups[item.category].push(item);
         }
         return groups;
     }, [ooppItems]);
@@ -199,7 +202,7 @@ export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppM
                                         {Object.entries(groupedItems).map(([cat, items]) => (
                                             <optgroup key={cat} label={cat}>
                                                 {items.map((item) => (
-                                                    <option key={item.ID} value={item.ID}>{item.Name}</option>
+                                                    <option key={item.id} value={item.id}>{item.name}</option>
                                                 ))}
                                             </optgroup>
                                         ))}

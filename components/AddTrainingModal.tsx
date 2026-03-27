@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { X, Search, Check, UserCheck, Loader2 } from "lucide-react";
 import { Employee } from "@/types/employee";
+import { getApiUrl } from "@/lib/constants";
 
 interface NewTrainingSessionInput {
     trainingName: string;
@@ -111,8 +112,9 @@ export default function AddTrainingModal({ employees, onClose, onSuccess }: AddT
         };
 
         setIsSaving(true);
+        const apiUrl = getApiUrl();
         try {
-            const res = await fetch("/api/trainings", {
+            const res = await fetch(`${apiUrl}/trainings`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(input),

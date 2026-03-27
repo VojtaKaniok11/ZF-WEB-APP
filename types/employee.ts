@@ -8,6 +8,7 @@ export interface Employee {
     hiringDate: string | null;
     isActive: boolean;
     hasWashingProgram: boolean;
+    workcenterName: string;
 }
 
 export interface PositionHistoryItem {
@@ -28,6 +29,8 @@ export interface EmployeeDetail {
     department: string;
     position: string;
     level: string;
+    workcenter: string;
+    workcenterName: string;
     isActive: boolean;
     managerName: string;
     positionHistory: PositionHistoryItem[];

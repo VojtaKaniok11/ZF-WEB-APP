@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Eye } from "lucide-react";
 import { Employee } from "@/types/employee";
-import StatusBadge from "./StatusBadge";
 
 interface EmployeeTableProps {
     employees: Employee[];
@@ -48,7 +47,7 @@ export default function EmployeeTable({
                                 Oddělení
                             </th>
                             <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Středisko
+                                Pracoviště
                             </th>
                             <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                                 Nástup
@@ -60,7 +59,7 @@ export default function EmployeeTable({
                                 Prací program
                             </th>
                             <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Akce
+                                Profil
                             </th>
                         </tr>
                     </thead>
@@ -85,20 +84,20 @@ export default function EmployeeTable({
                                     {emp.department}
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-3.5 text-gray-600">
-                                    {emp.costCenter}
+                                    {emp.workcenterName || "—"}
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-3.5 text-gray-500 tabular-nums">
                                     {formatDate(emp.hiringDate)}
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-3.5">
-                                    <StatusBadge isActive={emp.isActive} />
+                                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${emp.isActive ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-red-50 text-red-700 ring-red-600/20'}`}>
+                                        {emp.isActive ? 'Aktivní' : 'Neaktivní'}
+                                    </span>
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-700 font-medium">
-                                    {emp.hasWashingProgram ? (
-                                        <span className="inline-flex items-center rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">Ano</span>
-                                    ) : (
-                                        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Ne</span>
-                                    )}
+                                <td className="whitespace-nowrap px-5 py-3.5">
+                                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${emp.hasWashingProgram ? 'bg-blue-50 text-blue-700 ring-blue-600/20' : 'bg-gray-50 text-gray-600 ring-gray-500/10'}`}>
+                                        {emp.hasWashingProgram ? 'Ano' : 'Ne'}
+                                    </span>
                                 </td>
                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                     <button
@@ -106,7 +105,7 @@ export default function EmployeeTable({
                                         className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-blue-600 transition-all hover:bg-blue-50 hover:text-blue-700 active:scale-95"
                                     >
                                         <Eye size={15} />
-                                        Detail
+                                        Profil
                                     </button>
                                 </td>
                             </tr>

@@ -93,7 +93,7 @@ export default function PersonList({
                         {filtered.map((emp) => (
                             <li key={emp.id}>
                                 <Link
-                                    href={`${basePath}/${emp.personalNumber}`}
+                                    href={`${basePath}/detail?pn=${emp.personalNumber}`}
                                     className="flex items-center justify-between px-5 py-4 transition-colors hover:bg-blue-50/40"
                                 >
                                     <div className="flex items-center gap-4">
@@ -111,7 +111,7 @@ export default function PersonList({
                                                 </code>
                                             </div>
                                             <div className="text-xs text-gray-500">
-                                                {emp.department} · {emp.costCenter}
+                                                {emp.department} · {emp.workcenterName || "Bez pracoviště"}
                                             </div>
                                         </div>
                                     </div>

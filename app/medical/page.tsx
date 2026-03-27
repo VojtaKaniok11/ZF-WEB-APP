@@ -1,18 +1,32 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import MedicalClient from "@/components/MedicalClient";
-import { headers } from "next/headers";
+import { getApiUrl } from "@/lib/constants";
+import { Employee } from "@/types/employee";
 
-export default async function MedicalPage() {
-    // Get base URL for server-side fetch
-    const host = (await headers()).get("host");
-    const protocol = host?.includes("localhost") ? "http" : "https";
-    const baseUrl = `${protocol}://${host}`;
+export default function MedicalPage() {
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Server‑side fetch of employees
-    const res = await fetch(`${baseUrl}/api/employees`, {
-        cache: "no-store",
-    });
-    const json = (await res.json()) as { success: boolean; data: any };
-    const employees = json.success ? json.data : [];
+    useEffect(() => {
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/employees`)
+            .then(res => res.json())
+            .then(json => {
+                if (json.success) setEmployees(json.data);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <p className="text-gray-400">Načítám...</p>
+            </div>
+        );
+    }
 
     return <MedicalClient employees={employees} />;
 }

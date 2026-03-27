@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Search, ChevronRight, GraduationCap, Download, Loader2, Plus } from "lucide-react";
 import TrainingDetailModalV2 from "./TrainingDetailModalV2";
 import AddNewTrainingModalV2 from "./AddNewTrainingModalV2";
+import { getApiUrl } from "@/lib/constants";
 
 export interface TrainingV2 {
     id: number;
@@ -31,7 +32,8 @@ export default function TrainingsClientV2() {
 
     const loadTrainings = () => {
         setLoading(true);
-        fetch("/api/trainings-v2")
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/trainings-v2`)
             .then((res) => res.json())
             .then((data) => {
                 if (data.success) {
@@ -71,7 +73,8 @@ export default function TrainingsClientV2() {
     const handleExport = async () => {
         try {
             setExporting(true);
-            const response = await fetch(`/api/trainings-v2/export?filter=${exportFilter}&category=${encodeURIComponent(selectedCategory)}`);
+            const apiUrl = getApiUrl();
+            const response = await fetch(`${apiUrl}/trainings-v2/export?filter=${exportFilter}&category=${encodeURIComponent(selectedCategory)}`);
             if (!response.ok) throw new Error("Chyba při stahování Excelu.");
             
             const blob = await response.blob();
@@ -79,7 +82,7 @@ export default function TrainingsClientV2() {
             const a = document.createElement("a");
             a.style.display = "none";
             a.href = url;
-            a.download = `katalog_skoleni_${new Date().toISOString().split('T')[0]}.xlsx`;
+            a.download = `katalog_skoleni_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(a);
             a.click();
             
@@ -182,10 +185,20 @@ export default function TrainingsClientV2() {
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
-                        <div className="mb-3 text-4xl">🔍</div>
-                        <p className="text-sm text-gray-400">
+                        <div className="mb-4 text-4xl text-gray-200">🔍</div>
+                        <p className="text-sm text-gray-500 mb-6">
                             Žádné školení nebylo nalezeno.
                         </p>
+                        <button
+                            onClick={async () => {
+                                const apiUrl = getApiUrl();
+                                await fetch(`${apiUrl}/trainings-v2/seed`, { method: "POST" });
+                                loadTrainings();
+                            }}
+                            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+                        >
+                            Vložit ukázková data
+                        </button>
                     </div>
                 ) : (
                     <table className="w-full text-left border-collapse">

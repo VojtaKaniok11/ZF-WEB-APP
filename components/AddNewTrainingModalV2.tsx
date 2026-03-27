@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
+import { getApiUrl } from "@/lib/constants";
 
 interface Props {
     onClose: () => void;
@@ -9,8 +10,8 @@ interface Props {
 }
 
 interface Category {
-    ID: number;
-    Name: string;
+    id: number;
+    name: string;
 }
 
 export default function AddNewTrainingModalV2({ onClose, onSaved }: Props) {
@@ -26,13 +27,14 @@ export default function AddNewTrainingModalV2({ onClose, onSaved }: Props) {
     const [error, setError] = useState("");
 
     useEffect(() => {
-        fetch("/api/trainings-v2/categories")
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/trainings-v2/categories`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     setCategories(data.data);
                     if (data.data.length > 0) {
-                        setCategoryId(data.data[0].ID);
+                        setCategoryId(data.data[0].id);
                     }
                 }
                 setLoadingCats(false);
@@ -59,9 +61,9 @@ export default function AddNewTrainingModalV2({ onClose, onSaved }: Props) {
 
         setSaving(true);
         setError("");
-
+        const apiUrl = getApiUrl();
         try {
-            const res = await fetch("/api/trainings-v2", {
+            const res = await fetch(`${apiUrl}/trainings-v2`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -125,7 +127,7 @@ export default function AddNewTrainingModalV2({ onClose, onSaved }: Props) {
                             >
                                 <option value="" disabled>Vyberte kategorii...</option>
                                 {categories.map(c => (
-                                    <option key={c.ID} value={c.ID}>{c.Name}</option>
+                                    <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
                             </select>
                         )}

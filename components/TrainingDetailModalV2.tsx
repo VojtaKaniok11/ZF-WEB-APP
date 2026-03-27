@@ -5,6 +5,7 @@ import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download } 
 import * as xlsx from "xlsx";
 import { TrainingV2 } from "./TrainingsClientV2";
 import AddTrainingRecordModalV2 from "./AddTrainingRecordModalV2";
+import { getApiUrl } from "@/lib/constants";
 
 interface EmployeeStatus {
     employeeId: number;
@@ -38,7 +39,8 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
     const loadDetail = () => {
         if (!trainingId) return;
         setLoading(true);
-        fetch(`/api/trainings-v2/${trainingId}`)
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/trainings-v2/${trainingId}`)
             .then((res) => res.json())
             .then((data) => {
                 if (data.success) {

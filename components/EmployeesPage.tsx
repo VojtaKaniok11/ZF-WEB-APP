@@ -12,6 +12,7 @@ import ActionButtons from "./ActionButtons";
 import FilterBar from "./FilterBar";
 import EmployeeTable from "./EmployeeTable";
 import AddEmployeeModal from "./AddEmployeeModal";
+import { getApiUrl } from "@/lib/constants";
 
 interface EmployeesPageProps {
     initialEmployees?: Employee[];
@@ -24,87 +25,87 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
     /* ---- State ---- */
     const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
     const [isLoading, setIsLoading] = useState(initialEmployees.length === 0);
+    const [departments, setDepartments] = useState<string[]>([]);
 
     // Filters (initialized from URL query params)
     const [search, setSearch] = useState(searchParams.get("search") ?? "");
-    const [department, setDepartment] = useState(
-        searchParams.get("dept") ?? ""
-    );
-    const [status, setStatus] = useState(searchParams.get("status") ?? "");
+    const [department, setDepartment] = useState(searchParams.get("dept") ?? "");
     const [wp, setWp] = useState(searchParams.get("wp") ?? "");
+    const [workcenter, setWorkcenter] = useState(searchParams.get("wc") ?? "");
 
     // Modals
     const [showAddModal, setShowAddModal] = useState(false);
 
     /* ---- Data fetching ---- */
+
+    // Fetch Departments once
+    useEffect(() => {
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/employees/departments`)
+            .then(res => res.json())
+            .then(res => { if (res.success) setDepartments(res.data); })
+            .catch(() => {});
+    }, []);
+
     const fetchEmployees = useCallback(async () => {
         setIsLoading(true);
         try {
             const params = new URLSearchParams();
             if (search) params.set("search", search);
             if (department) params.set("dept", department);
-            if (status) params.set("status", status);
             if (wp) params.set("wp", wp);
+            if (workcenter) params.set("wc", workcenter);
 
             const qs = params.toString();
-            const res = await fetch(`/api/employees${qs ? `?${qs}` : ""}`);
+            const apiUrl = getApiUrl();
+            const res = await fetch(`${apiUrl}/employees${qs ? `?${qs}` : ""}`);
             const result = await res.json();
 
             if (result.success) {
                 setEmployees(result.data);
             }
         } catch {
-            // silent for now — could add toast
+            // silent for now
         } finally {
             setIsLoading(false);
         }
-    }, [search, department, status, wp]);
+    }, [search, department, wp, workcenter]);
 
-    // Initial load
-    useEffect(() => {
-        fetchEmployees();
-    }, [fetchEmployees]);
-
-    /* ---- Filter actions ---- */
-    function applyFilters(newSearch?: string, newDept?: string, newStatus?: string, newWp?: string) {
+    // Apply URL params
+    const syncUrl = useCallback(() => {
         const params = new URLSearchParams();
-        const s = newSearch !== undefined ? newSearch : search;
-        const d = newDept !== undefined ? newDept : department;
-        const st = newStatus !== undefined ? newStatus : status;
-        const w = newWp !== undefined ? newWp : wp;
-
-        if (s) params.set("search", s);
-        if (d) params.set("dept", d);
-        if (st) params.set("status", st);
-        if (w) params.set("wp", w);
+        if (search) params.set("search", search);
+        if (department) params.set("dept", department);
+        if (wp) params.set("wp", wp);
+        if (workcenter) params.set("wc", workcenter);
 
         const qs = params.toString();
         const newUrl = qs ? `/?${qs}` : "/";
 
-        // Only push if the URL actually changed to avoid redundant history entries and loops
         if (window.location.search !== (qs ? `?${qs}` : "")) {
             router.push(newUrl, { scroll: false });
         }
-    }
+    }, [search, department, wp, workcenter, router]);
 
-    // Direct handlers for filters
+    // Initial load and URL sync
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchEmployees();
+            syncUrl();
+        }, 150); // Small debounce to avoid flashing while typing fast
+        return () => clearTimeout(timer);
+    }, [fetchEmployees, syncUrl]);
+
+    // Handlers
     const handleSearchChange = (val: string) => setSearch(val);
-    const handleDepartmentChange = (val: string) => {
-        setDepartment(val);
-        applyFilters(search, val, status, wp);
-    };
-    const handleStatusChange = (val: string) => {
-        setStatus(val);
-        applyFilters(search, department, val, wp);
-    };
-    const handleWpChange = (val: string) => {
-        setWp(val);
-        applyFilters(search, department, status, val);
-    };
+    const handleDepartmentChange = (val: string) => setDepartment(val);
+    const handleWpChange = (val: string) => setWp(val);
+    const handleWorkcenterChange = (val: string) => setWorkcenter(val);
 
     /* ---- Save new employee ---- */
     async function handleSaveEmployee(data: NewEmployeePayload) {
-        const res = await fetch("/api/employees", {
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/employees`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
@@ -121,10 +122,9 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
 
     /* ---- Navigate to detail ---- */
     function handleViewDetail(personalNumber: string) {
-        router.push(`/employee/${personalNumber}`);
+        router.push(`/employee/profile?pn=${personalNumber}`);
     }
 
-    /* ---- Render ---- */
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30">
             <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -141,29 +141,26 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
                 <FilterBar
                     search={search}
                     department={department}
-                    status={status}
+                    departments={departments}
                     wp={wp}
+                    workcenter={workcenter}
                     onSearchChange={handleSearchChange}
                     onDepartmentChange={handleDepartmentChange}
-                    onStatusChange={handleStatusChange}
                     onWpChange={handleWpChange}
-                    onSubmit={() => applyFilters()}
+                    onWorkcenterChange={handleWorkcenterChange}
+                    onSubmit={() => fetchEmployees()}
                 />
 
                 {/* Content area */}
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white py-20 shadow-sm">
                         <Loader2 size={36} className="animate-spin text-blue-500 mb-4" />
-                        <p className="text-sm text-gray-500">
-                            Načítám data z databáze...
-                        </p>
+                        <p className="text-sm text-gray-500">Načítám data z databáze...</p>
                     </div>
                 ) : employees.length === 0 ? (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white py-20 shadow-sm">
                         <div className="mb-3 text-4xl">👤</div>
-                        <p className="text-sm text-gray-400">
-                            Žádní zaměstnanci nebyli nalezeni.
-                        </p>
+                        <p className="text-sm text-gray-400">Žádní zaměstnanci nebyli nalezeni.</p>
                     </div>
                 ) : (
                     <EmployeeTable
@@ -172,7 +169,6 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
                     />
                 )}
 
-                {/* Add modal */}
                 <AddEmployeeModal
                     isOpen={showAddModal}
                     onClose={() => setShowAddModal(false)}

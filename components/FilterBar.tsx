@@ -1,29 +1,30 @@
 "use client";
 
 import { Search, SlidersHorizontal } from "lucide-react";
-import { DEPARTMENTS } from "@/lib/constants";
 
 interface FilterBarProps {
     search: string;
     department: string;
-    status: string;
+    departments: string[];
     wp: string;
+    workcenter: string;
     onSearchChange: (value: string) => void;
     onDepartmentChange: (value: string) => void;
-    onStatusChange: (value: string) => void;
     onWpChange: (value: string) => void;
+    onWorkcenterChange: (value: string) => void;
     onSubmit: () => void;
 }
 
 export default function FilterBar({
     search,
     department,
-    status,
+    departments,
     wp,
+    workcenter,
     onSearchChange,
     onDepartmentChange,
-    onStatusChange,
     onWpChange,
+    onWorkcenterChange,
     onSubmit,
 }: FilterBarProps) {
     return (
@@ -32,7 +33,7 @@ export default function FilterBar({
                 <SlidersHorizontal size={16} />
                 Filtry
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 lg:grid-cols-3">
                 {/* Search */}
                 <div className="relative">
                     <Search
@@ -58,22 +59,11 @@ export default function FilterBar({
                     className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 >
                     <option value="">Všechna oddělení</option>
-                    {DEPARTMENTS.map((dept) => (
+                    {departments.map((dept) => (
                         <option key={dept} value={dept}>
                             {dept}
                         </option>
                     ))}
-                </select>
-
-                {/* Status */}
-                <select
-                    value={status}
-                    onChange={(e) => onStatusChange(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                    <option value="">Všichni</option>
-                    <option value="true">Aktivní</option>
-                    <option value="false">Neaktivní</option>
                 </select>
 
                 {/* Washing program */}
@@ -86,6 +76,28 @@ export default function FilterBar({
                     <option value="yes">Prací program: Ano</option>
                     <option value="no">Prací program: Ne</option>
                 </select>
+
+                {/* Workcenter (Manual input for now, could be select) */}
+                <div className="relative">
+                    <input
+                        type="text"
+                        value={workcenter}
+                        onChange={(e) => onWorkcenterChange(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") onSubmit();
+                        }}
+                        placeholder="Pracoviště..."
+                        className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 px-4 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                </div>
+                
+                {/* Submit button */}
+                <button
+                    onClick={onSubmit}
+                    className="w-full rounded-lg bg-[#0054A6] py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 active:scale-95 sm:col-span-4 lg:col-span-1"
+                >
+                    Filtrovat
+                </button>
             </div>
         </div>
     );

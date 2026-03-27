@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import Modal from "./Modal";
 import StatusBadge from "./StatusBadge";
 import { EmployeeDetail } from "@/types/employee";
+import { getApiUrl } from "@/lib/constants";
 
 interface EmployeeDetailModalProps {
     isOpen: boolean;
@@ -31,9 +32,10 @@ export default function EmployeeDetailModal({
         async function fetchDetail() {
             setIsLoading(true);
             setError("");
+            const apiUrl = getApiUrl();
             try {
                 const res = await fetch(
-                    `/api/employees/${encodeURIComponent(personalNumber!)}`
+                    `${apiUrl}/employees/${encodeURIComponent(personalNumber!)}`
                 );
                 const result = await res.json();
 
