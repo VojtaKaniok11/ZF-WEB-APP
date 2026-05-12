@@ -1,135 +1,225 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Employee } from "@/types/employee";
-import PersonList from "@/components/PersonList";
-import AddOoppModal from "@/components/AddOoppModal";
-import { Plus, Download, Loader2 } from "lucide-react";
-import * as xlsx from "xlsx";
+import { Search, ChevronRight, Download, Loader2, Plus } from "lucide-react";
+import OoppDetailModal from "./OoppDetailModal";
 import { getApiUrl } from "@/lib/constants";
+import { Employee } from "@/types/employee";
+import CreateOoppItemModal from "./CreateOoppItemModal";
 
-interface OoppItem {
+export interface OoppItemV2 {
     id: string;
     name: string;
     category: string;
 }
 
-interface OoppSummaryItem {
-    personalNumber: string;
-    ooppItemId: string;
-    status: "issued" | "eligible" | "eligible_soon";
-}
-
-interface OoppClientProps {
+interface Props {
     employees: Employee[];
 }
 
-export default function OoppClient({ employees }: OoppClientProps) {
-    const [modalOpen, setModalOpen] = useState(false);
-    const [items, setItems] = useState<OoppItem[]>([]);
-    // Filters
-    const [filterCategory, setFilterCategory] = useState<string>("Vše");
+export default function OoppClient({ employees }: Props) {
+    const [items, setItems] = useState<OoppItemV2[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [search, setSearch] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
     const [exporting, setExporting] = useState(false);
 
-    useEffect(() => {
-        const apiUrl = getApiUrl();
-        // Fetch all items to get categories
-        fetch(`${apiUrl}/oopp/items`)
-            .then(res => res.json())
-            .then(data => { if (data.success) setItems(data.data); })
-            .catch(() => {});
+    const categories = useMemo(() => {
+        const cats = new Set(items.map((t) => t.category));
+        return ["Vše", ...Array.from(cats)].sort();
+    }, [items]);
 
-        // Fetch summary (if exists, or we could fetch general data)
-        // For now, let's just use categories
+    const loadItems = () => {
+        setLoading(true);
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/oopp`)
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    setItems(data.data);
+                }
+                setLoading(false);
+            })
+            .catch((err) => {
+                console.error(err);
+                setLoading(false);
+            });
+    };
+
+    useEffect(() => {
+        loadItems();
     }, []);
 
-    const categories = useMemo(() => {
-        const cats = Array.from(new Set(items.map(i => i.category)));
-        return cats.sort();
-    }, [items]);
+    const filtered = useMemo(() => {
+        let res = items;
+        
+        if (selectedCategory !== "Vše") {
+            res = res.filter((t) => t.category === selectedCategory);
+        }
+        
+        if (search) {
+            const s = search.toLowerCase();
+            res = res.filter(
+                (t) =>
+                    t.name.toLowerCase().includes(s) ||
+                    t.category.toLowerCase().includes(s)
+            );
+        }
+        
+        return res;
+    }, [items, search, selectedCategory]);
 
     const handleExport = async () => {
         try {
             setExporting(true);
-            const data = employees.map(emp => ({
-                'Příjmení a jméno': `${emp.lastName} ${emp.firstName}`,
-                'Osobní číslo': emp.personalNumber || '',
-                'Oddělení': emp.department || '',
-                'Pracoviště': emp.workcenterName || ''
-            }));
-
-            const ws = xlsx.utils.json_to_sheet(data);
-            const wb = xlsx.utils.book_new();
-            xlsx.utils.book_append_sheet(wb, ws, "OOPP");
-            xlsx.writeFile(wb, `oopp_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+            const apiUrl = getApiUrl();
+            const response = await fetch(`${apiUrl}/oopp/export`); // Note: need to implement this endpoint
+            if (!response.ok) throw new Error("Chyba při stahování Excelu.");
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            a.download = `oopp_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
         } catch (error) {
-            console.error("Export failed:", error);
+            console.error("Export selhal:", error);
+            alert("Export zatím není plně implementován pro tuto stránku.");
         } finally {
             setExporting(false);
         }
     };
 
-    const filteredEmployees = useMemo(() => {
-        if (filterCategory === "Vše") return employees;
-        // In a real app, we'd filter by the summary data.
-        return employees; 
-    }, [employees, filterCategory]);
+    if (loading) {
+        return (
+            <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 flex justify-center mt-20">
+                <div className="text-sm font-semibold text-gray-500 animate-pulse">Načítání OOPP...</div>
+            </div>
+        );
+    }
 
     return (
-        <>
-            <PersonList
-                employees={filteredEmployees}
-                basePath="/oopp"
-                title="OOPP"
-                description="Osobní ochranné pracovní prostředky — boty, rukavice, oděvy, ochrana zraku a sluchu."
-                icon={
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+            {/* Header */}
+            <div className="mb-8 flex items-center gap-3">
+                <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-lg shadow-blue-600/25"
+                    style={{ backgroundColor: "#0054A6" }}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
                     </svg>
-                }
-                actionButton={
-                    <div className="flex items-center gap-2">
-                         <button
-                            onClick={handleExport}
-                            disabled={exporting}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 disabled:opacity-60 cursor-pointer"
-                        >
-                            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                            Excel
-                        </button>
-                        <button
-                            onClick={() => setModalOpen(true)}
-                            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer"
-                            style={{ backgroundColor: "#0054A6" }}
-                        >
-                            <Plus size={16} />
-                            Přidat výdej OOPP
-                        </button>
+                </div>
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-gray-900">OOPP Evidence</h1>
+                    <p className="text-sm text-gray-500">Katalog osobních ochranných pracovních pomůcek a jejich výdeje.</p>
+                </div>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Hledat položku podle názvu..."
+                        className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                </div>
+                <div className="sm:w-64 shrink-0">
+                    <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 px-4 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                        {categories.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* Count badge */}
+            <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                    Nalezeno: {filtered.length} položek OOPP
+                </span>
+                <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0054A6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer shrink-0"
+                >
+                    <Plus size={16} />
+                    Přidat OOPP
+                </button>
+            </div>
+
+            {/* List */}
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                {filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16">
+                        <div className="mb-4 text-4xl text-gray-200">🛠️</div>
+                        <p className="text-sm text-gray-500 mb-6">
+                            Žádná OOPP položka nebyla nalezena.
+                        </p>
                     </div>
-                }
-                filterControls={
-                    <div className="flex items-center gap-2">
-                        <select
-                            value={filterCategory}
-                            onChange={(e) => setFilterCategory(e.target.value)}
-                            className="rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-8 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm transition-colors"
-                        >
-                            <option value="Vše">Všechny kategorie</option>
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
+                ) : (
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                <th className="px-6 py-4 w-1/2">Název OOPP</th>
+                                <th className="px-6 py-4">Kategorie</th>
+                                <th className="px-6 py-4 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {filtered.map((t) => (
+                                <tr
+                                    key={t.id}
+                                    onClick={() => setSelectedItemId(t.id)}
+                                    className="transition-colors hover:bg-blue-50/40 cursor-pointer group"
+                                >
+                                    <td className="px-6 py-4">
+                                        <div className="font-semibold text-gray-900">{t.name}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                                            {t.category}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500 transition-colors inline-block" />
+                                    </td>
+                                </tr>
                             ))}
-                        </select>
-                    </div>
-                }
+                        </tbody>
+                    </table>
+                )}
+            </div>
+
+            <OoppDetailModal
+                itemId={selectedItemId}
+                employees={employees}
+                onClose={() => setSelectedItemId(null)}
             />
 
-            {modalOpen && (
-                <AddOoppModal
-                    employees={employees}
-                    onClose={() => setModalOpen(false)}
-                    onSuccess={() => setModalOpen(false)}
+            {showCreateModal && (
+                <CreateOoppItemModal
+                    onClose={() => setShowCreateModal(false)}
+                    onSaved={() => {
+                        setShowCreateModal(false);
+                        loadItems();
+                    }}
                 />
             )}
-        </>
+        </div>
     );
 }

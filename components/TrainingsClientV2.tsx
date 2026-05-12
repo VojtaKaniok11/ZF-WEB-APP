@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { Search, ChevronRight, GraduationCap, Download, Loader2, Plus } from "lucide-react";
 import TrainingDetailModalV2 from "./TrainingDetailModalV2";
 import AddNewTrainingModalV2 from "./AddNewTrainingModalV2";
@@ -21,9 +21,12 @@ export default function TrainingsClientV2() {
     const [selectedTrainingId, setSelectedTrainingId] = useState<number | null>(null);
     const [search, setSearch] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
+    const [selectedWorkcenter, setSelectedWorkcenter] = useState<string>("Vše");
     const [exportFilter, setExportFilter] = useState("all");
     const [exporting, setExporting] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    
+    const deferredSearch = useDeferredValue(search);
 
     const categories = useMemo(() => {
         const cats = new Set(trainings.map((t) => t.categoryName));
@@ -58,8 +61,8 @@ export default function TrainingsClientV2() {
             res = res.filter((t) => t.categoryName === selectedCategory);
         }
         
-        if (search) {
-            const s = search.toLowerCase();
+        if (deferredSearch) {
+            const s = deferredSearch.toLowerCase();
             res = res.filter(
                 (t) =>
                     t.name.toLowerCase().includes(s) ||
@@ -68,13 +71,13 @@ export default function TrainingsClientV2() {
         }
         
         return res;
-    }, [trainings, search, selectedCategory]);
+    }, [trainings, deferredSearch, selectedCategory]);
 
     const handleExport = async () => {
         try {
             setExporting(true);
             const apiUrl = getApiUrl();
-            const response = await fetch(`${apiUrl}/trainings-v2/export?filter=${exportFilter}&category=${encodeURIComponent(selectedCategory)}`);
+            const response = await fetch(`${apiUrl}/trainings-v2/export?filter=${exportFilter}&category=${encodeURIComponent(selectedCategory)}&workcenter=${encodeURIComponent(selectedWorkcenter)}`);
             if (!response.ok) throw new Error("Chyba při stahování Excelu.");
             
             const blob = await response.blob();
@@ -132,7 +135,7 @@ export default function TrainingsClientV2() {
                         className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                 </div>
-                <div className="sm:w-64 shrink-0">
+                <div className="sm:w-48 shrink-0">
                     <select
                         value={selectedCategory}
                         onChange={(e) => setSelectedCategory(e.target.value)}
@@ -143,42 +146,29 @@ export default function TrainingsClientV2() {
                         ))}
                     </select>
                 </div>
+                <div className="sm:w-48 shrink-0">
+                    <input
+                        type="text"
+                        value={selectedWorkcenter}
+                        onChange={(e) => setSelectedWorkcenter(e.target.value)}
+                        placeholder="Kmenové středisko..."
+                        className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 px-4 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                </div>
             </div>
 
-            {/* Count badge & Export */}
+            {/* Count badge */}
             <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
                     Nalezeno: {filtered.length} školení
                 </span>
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                    <select
-                        value={exportFilter}
-                        onChange={(e) => setExportFilter(e.target.value)}
-                        className="rounded-lg border border-gray-300 bg-white py-2.5 px-4 text-sm text-gray-700 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-600/20 w-full sm:w-auto shadow-sm transition-colors"
-                    >
-                        <option value="all">Exportovat všechna data</option>
-                        <option value="expiring">Exportovat prošlá a končící v příštích 30 dnech</option>
-                    </select>
-                    <button
-                        onClick={handleExport}
-                        disabled={exporting}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed shrink-0 cursor-pointer"
-                    >
-                        {exporting ? (
-                            <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                            <Download size={16} />
-                        )}
-                        Export Excel
-                    </button>
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0054A6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer shrink-0"
-                    >
-                        <Plus size={16} />
-                        Přidat školení
-                    </button>
-                </div>
+                <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0054A6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer shrink-0"
+                >
+                    <Plus size={16} />
+                    Přidat školení
+                </button>
             </div>
 
             {/* List */}

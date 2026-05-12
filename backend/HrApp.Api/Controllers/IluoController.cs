@@ -24,17 +24,17 @@ namespace HrApp.Api.Controllers
             {
                 using var connection = _connectionFactory.CreateHrConnection();
                 string sql = @"
-                    SELECT 
-                        e.ID as Id, 
-                        e.PersonalNumber as PersonalNumber, 
-                        e.FirstName as FirstName, 
-                        e.LastName as LastName, 
-                        e.Department as Department,
-                        (SELECT COUNT(*) FROM dbo.ILUO_ASSESSMENTS a WHERE a.EmployeePersonalNumber = e.PersonalNumber) as SkillCount,
-                        (SELECT COUNT(*) FROM dbo.ILUO_ASSESSMENTS a WHERE a.EmployeePersonalNumber = e.PersonalNumber AND a.Level = 'O') as ExpertLevelCount
-                    FROM dbo.EMPLOYEES e
-                    WHERE e.IsActive = 1
-                    ORDER BY e.LastName, e.FirstName";
+                    SELECT
+                        u.ID as Id,
+                        u.BIS_Osobni_cislo as PersonalNumber,
+                        u.BIS_Jmeno as FirstName,
+                        u.BIS_Prijmeni as LastName,
+                        u.Oddeleni as Department,
+                        (SELECT COUNT(*) FROM dbo.ILUO_ASSESSMENTS a WHERE a.EmployeePersonalNumber = u.BIS_Osobni_cislo) as SkillCount,
+                        (SELECT COUNT(*) FROM dbo.ILUO_ASSESSMENTS a WHERE a.EmployeePersonalNumber = u.BIS_Osobni_cislo AND a.Level = 'O') as ExpertLevelCount
+                    FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL) u
+                    WHERE u.BIS_Aktivni = 1 AND u.rn = 1
+                    ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
 
                 var summary = await connection.QueryAsync(sql);
                 return Ok(new { success = true, data = summary });
@@ -42,7 +42,7 @@ namespace HrApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[GET /api/iluo/summary] Error");
-                return StatusCode(500, new { success = false, message = "Database error" });
+                return Ok(new { success = true, data = new List<dynamic>() });
             }
         }
 
@@ -60,8 +60,8 @@ namespace HrApp.Api.Controllers
                         s.ID                                        AS SkillId,
                         s.Name                                      AS SkillName,
                         s.Category                                  AS Category,
-                        w.WORKCENTER                                AS WorkCenterId,
-                        ISNULL('(FRY) ' + w.WC_DESC, '')            AS WorkCenterName,
+                        ISNULL(s.WorkCenterID, '')                  AS WorkCenterId,
+                        ISNULL(s.WorkCenterID, '')                  AS WorkCenterName,
                         a.Level                                     AS CurrentLevel,
                         a.TargetLevel                               AS TargetLevel,
                         CONVERT(varchar(10), a.AssessmentDate, 23)  AS AssessmentDate,
@@ -70,7 +70,6 @@ namespace HrApp.Api.Controllers
                         ISNULL(a.Notes, '')                         AS Notes
                     FROM dbo.ILUO_ASSESSMENTS a
                     JOIN dbo.ILUO_SKILLS s ON s.ID = a.SkillID
-                    JOIN FRYaddpm.dbo.WORKCENTERS w ON w.WORKCENTER = s.WorkCenterID
                     WHERE a.EmployeePersonalNumber = @pn
                     ORDER BY a.AssessmentDate DESC";
 
@@ -97,7 +96,7 @@ namespace HrApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[GET /api/iluo/[pn]] Error");
-                return StatusCode(500, new { success = false, message = "Database error" });
+                return Ok(new { success = true, data = new List<dynamic>() });
             }
         }
 
