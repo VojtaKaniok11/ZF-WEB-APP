@@ -14,6 +14,7 @@ import EmployeeTable from "./EmployeeTable";
 import AddEmployeeModal from "./AddEmployeeModal";
 import { getApiUrl } from "@/lib/constants";
 
+
 interface EmployeesPageProps {
     initialEmployees?: Employee[];
 }
@@ -25,59 +26,56 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
     /* ---- State ---- */
     const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
     const [isLoading, setIsLoading] = useState(initialEmployees.length === 0);
-    const [departments, setDepartments] = useState<string[]>([]);
 
-    // Filters (initialized from URL query params)
+    // Filters
     const [search, setSearch] = useState(searchParams.get("search") ?? "");
-    const [department, setDepartment] = useState(searchParams.get("dept") ?? "");
-    const [wp, setWp] = useState(searchParams.get("wp") ?? "");
+    const [category, setCategory] = useState(searchParams.get("cat") ?? "");
     const [workcenter, setWorkcenter] = useState(searchParams.get("wc") ?? "");
+    const [workcenterDesc, setWorkcenterDesc] = useState(searchParams.get("wcd") ?? "");
+    const [active, setActive] = useState(searchParams.get("active") ?? "");
 
     // Modals
     const [showAddModal, setShowAddModal] = useState(false);
 
+
     /* ---- Data fetching ---- */
-
-    // Fetch Departments once
-    useEffect(() => {
-        const apiUrl = getApiUrl();
-        fetch(`${apiUrl}/employees/departments`)
-            .then(res => res.json())
-            .then(res => { if (res.success) setDepartments(res.data); })
-            .catch(() => {});
-    }, []);
-
     const fetchEmployees = useCallback(async () => {
         setIsLoading(true);
         try {
             const params = new URLSearchParams();
             if (search) params.set("search", search);
-            if (department) params.set("dept", department);
-            if (wp) params.set("wp", wp);
+            if (category) params.set("cat", category);
             if (workcenter) params.set("wc", workcenter);
+            if (workcenterDesc) params.set("wcd", workcenterDesc);
+            if (active) params.set("active", active);
 
             const qs = params.toString();
             const apiUrl = getApiUrl();
             const res = await fetch(`${apiUrl}/employees${qs ? `?${qs}` : ""}`);
             const result = await res.json();
 
-            if (result.success) {
+            if (result.success && result.data) {
                 setEmployees(result.data);
+            } else {
+                setEmployees([]);
             }
-        } catch {
-            // silent for now
+        } catch (error) {
+            console.error("Error fetching employees:", error);
+            setEmployees([]);
         } finally {
             setIsLoading(false);
         }
-    }, [search, department, wp, workcenter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, category, workcenter, workcenterDesc, active]);
 
     // Apply URL params
     const syncUrl = useCallback(() => {
         const params = new URLSearchParams();
         if (search) params.set("search", search);
-        if (department) params.set("dept", department);
-        if (wp) params.set("wp", wp);
+        if (category) params.set("cat", category);
         if (workcenter) params.set("wc", workcenter);
+        if (workcenterDesc) params.set("wcd", workcenterDesc);
+        if (active) params.set("active", active);
 
         const qs = params.toString();
         const newUrl = qs ? `/?${qs}` : "/";
@@ -85,22 +83,16 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
         if (window.location.search !== (qs ? `?${qs}` : "")) {
             router.push(newUrl, { scroll: false });
         }
-    }, [search, department, wp, workcenter, router]);
+    }, [search, category, workcenter, workcenterDesc, active, router]);
 
-    // Initial load and URL sync
+    // Initial load and URL sync with debounce
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchEmployees();
             syncUrl();
-        }, 150); // Small debounce to avoid flashing while typing fast
+        }, 150);
         return () => clearTimeout(timer);
     }, [fetchEmployees, syncUrl]);
-
-    // Handlers
-    const handleSearchChange = (val: string) => setSearch(val);
-    const handleDepartmentChange = (val: string) => setDepartment(val);
-    const handleWpChange = (val: string) => setWp(val);
-    const handleWorkcenterChange = (val: string) => setWorkcenter(val);
 
     /* ---- Save new employee ---- */
     async function handleSaveEmployee(data: NewEmployeePayload) {
@@ -122,7 +114,15 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
 
     /* ---- Navigate to detail ---- */
     function handleViewDetail(personalNumber: string) {
-        router.push(`/employee/profile?pn=${personalNumber}`);
+        const params = new URLSearchParams();
+        params.set("pn", personalNumber);
+        if (search) params.set("search", search);
+        if (category) params.set("cat", category);
+        if (workcenter) params.set("wc", workcenter);
+        if (workcenterDesc) params.set("wcd", workcenterDesc);
+        if (active) params.set("active", active);
+
+        router.push(`/employee/profile?${params.toString()}`);
     }
 
     return (
@@ -134,21 +134,21 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
                 />
 
                 <ActionButtons
-                    onAdd={() => setShowAddModal(true)}
                     count={isLoading ? undefined : employees.length}
+                    onAddClick={() => setShowAddModal(true)}
                 />
 
                 <FilterBar
                     search={search}
-                    department={department}
-                    departments={departments}
-                    wp={wp}
+                    category={category}
                     workcenter={workcenter}
-                    onSearchChange={handleSearchChange}
-                    onDepartmentChange={handleDepartmentChange}
-                    onWpChange={handleWpChange}
-                    onWorkcenterChange={handleWorkcenterChange}
-                    onSubmit={() => fetchEmployees()}
+                    workcenterDesc={workcenterDesc}
+                    active={active}
+                    onSearchChange={setSearch}
+                    onCategoryChange={setCategory}
+                    onWorkcenterChange={setWorkcenter}
+                    onWorkcenterDescChange={setWorkcenterDesc}
+                    onActiveChange={setActive}
                 />
 
                 {/* Content area */}
