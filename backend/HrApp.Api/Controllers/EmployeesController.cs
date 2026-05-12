@@ -11,6 +11,7 @@ namespace HrApp.Api.Controllers
     {
         private readonly ISqlConnectionFactory _connectionFactory;
         private readonly ILogger<EmployeesController> _logger;
+        private static bool _schemaChecked = false;
 
         public EmployeesController(ISqlConnectionFactory connectionFactory, ILogger<EmployeesController> logger)
         {
@@ -18,39 +19,79 @@ namespace HrApp.Api.Controllers
             _logger = logger;
         }
 
+        private async Task EnsureSchemaAsync(System.Data.IDbConnection connection)
+        {
+            if (_schemaChecked) return;
+            
+            string sql = @"
+                IF COL_LENGTH('HR.dbo.EMPLOYEES', 'Category') IS NULL
+                    ALTER TABLE HR.dbo.EMPLOYEES ADD Category NVARCHAR(50) NULL;
+                IF COL_LENGTH('HR.dbo.EMPLOYEES', 'CostNumber') IS NULL
+                    ALTER TABLE HR.dbo.EMPLOYEES ADD CostNumber NVARCHAR(50) NULL;
+                IF COL_LENGTH('HR.dbo.EMPLOYEES', 'WorkcenterDesc') IS NULL
+                    ALTER TABLE HR.dbo.EMPLOYEES ADD WorkcenterDesc NVARCHAR(100) NULL;
+                IF COL_LENGTH('HR.dbo.EMPLOYEES', 'LeavingDate') IS NULL
+                    ALTER TABLE HR.dbo.EMPLOYEES ADD LeavingDate DATETIME NULL;
+            ";
+            try 
+            {
+                await connection.ExecuteAsync(sql);
+                _schemaChecked = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not auto-update schema. Missing columns might cause query failures.");
+            }
+        }
+
         [HttpGet]
-        public async Task<IActionResult> GetEmployees([FromQuery] string? search, [FromQuery] string? dept, [FromQuery] string? wp, [FromQuery] string? wc)
+        public async Task<IActionResult> GetEmployees([FromQuery] string? search, [FromQuery] string? cat, [FromQuery] string? wc, [FromQuery] string? wcd, [FromQuery] string? active)
         {
             try
             {
                 using var connection = _connectionFactory.CreateHrConnection();
+                await EnsureSchemaAsync(connection);
+
                 var conditions = new List<string>();
                 var parameters = new DynamicParameters();
 
-                // Always only active people
-                conditions.Add("u.Aktivni = 1");
+                // Active filter: default = only active; "all" = both; "no" = only inactive (max 5 years)
+                // Always exclude inactive employees who left more than 5 years ago
+                conditions.Add("(u.BIS_Aktivni = 1 OR e.LeavingDate IS NULL OR e.LeavingDate >= DATEADD(year, -5, GETDATE()))");
+
+                if (active == "all")
+                    { /* show active + recently inactive */ }
+                else if (active == "no")
+                    conditions.Add("u.BIS_Aktivni = 0");
+                else
+                    conditions.Add("u.BIS_Aktivni = 1");
 
                 if (!string.IsNullOrWhiteSpace(search))
                 {
                     conditions.Add("(u.BIS_Jmeno LIKE @search OR u.BIS_Prijmeni LIKE @search OR u.BIS_Osobni_cislo LIKE @search OR u.User_Name LIKE @search)");
                     parameters.Add("search", $"%{search}%");
                 }
-                if (!string.IsNullOrWhiteSpace(dept))
-                {
-                    conditions.Add("u.Oddeleni = @dept");
-                    parameters.Add("dept", dept);
-                }
 
-                if (wp == "yes") conditions.Add("ISNULL(e.HasWashingProgram, 0) = 1");
-                else if (wp == "no") conditions.Add("ISNULL(e.HasWashingProgram, 0) = 0");
+                if (!string.IsNullOrWhiteSpace(cat))
+                {
+                    conditions.Add("e.Category = @cat");
+                    parameters.Add("cat", cat);
+                }
 
                 if (!string.IsNullOrWhiteSpace(wc))
                 {
-                    conditions.Add("(e.Workcenter LIKE @wc OR w.WC_DESC LIKE @wc)");
+                    conditions.Add("CAST(u.Stredisko AS VARCHAR) LIKE @wc");
                     parameters.Add("wc", $"%{wc}%");
                 }
 
-                string whereClause = conditions.Count > 0 ? "WHERE u.rn = 1 AND u.Aktivni = 1 AND " + string.Join(" AND ", conditions) : "WHERE u.rn = 1 AND u.Aktivni = 1";
+                if (!string.IsNullOrWhiteSpace(wcd))
+                {
+                    conditions.Add("u.Oddeleni LIKE @wcd");
+                    parameters.Add("wcd", $"%{wcd}%");
+                }
+
+                string whereClause = conditions.Count > 0 ? "WHERE u.rn = 1 AND " + string.Join(" AND ", conditions) : "WHERE u.rn = 1";
+
 
                 string sql = $@"
                     SELECT
@@ -59,20 +100,24 @@ namespace HrApp.Api.Controllers
                         ISNULL(u.BIS_Jmeno, '')                    AS FirstName,
                         ISNULL(u.BIS_Prijmeni, '')                 AS LastName,
                         ISNULL(u.Oddeleni, '')                     AS Department,
-                        ISNULL(e.Workcenter, '')                   AS Workcenter,
-                        ISNULL('(FRY) ' + w.WC_DESC, '')           AS WorkcenterName,
+                        ISNULL(CAST(u.Stredisko AS VARCHAR), '')   AS Workcenter,
+                        ISNULL(CAST(u.Stredisko AS VARCHAR), '')   AS WorkcenterName,
+                        ISNULL(e.Category, '')                     AS Category,
+                        ISNULL(e.CostNumber, '')                   AS CostNumber,
                         e.HiringDate                               AS HiringDate,
-                        CAST(ISNULL(u.Aktivni, 0) AS BIT)          AS IsActive,
+                        CAST(ISNULL(u.BIS_Aktivni, 0) AS BIT)      AS IsActive,
                         ISNULL(e.HasWashingProgram, 0)             AS HasWashingProgram,
                         e.Photo                                    AS Photo,
                         ISNULL(u.User_Name, '')                    AS UserName,
                         ISNULL(u.EMail, '')                        AS Email,
                         ISNULL(u.BIS_Cislo_Karty, '')              AS CardNumber,
                         CAST(ISNULL(u.BIS_Aktivni, 0) AS BIT)      AS BisActive,
-                        u.BIS_Osoba_ID                             AS BisOsobaId
-                    FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY ISNULL(BIS_Osobni_cislo, CAST(ID AS NVARCHAR)) ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS) u
+                        u.BIS_Osoba_ID                             AS BisOsobaId,
+                        e.LeavingDate                              AS LeavingDate
+                    FROM (SELECT ID, BIS_Osobni_cislo, BIS_Jmeno, BIS_Prijmeni, Oddeleni, Stredisko, BIS_Aktivni, User_Name, EMail, BIS_Cislo_Karty, BIS_Osoba_ID,
+                                 ROW_NUMBER() OVER(PARTITION BY ISNULL(BIS_Osobni_cislo, CAST(ID AS NVARCHAR)) ORDER BY ID DESC) AS rn
+                          FROM USER_MANAGEMENT.dbo.USERS) u
                     LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
-                    LEFT JOIN FRYaddpm.dbo.WORKCENTERS w ON w.WORKCENTER = e.Workcenter
                     {whereClause} ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
 
                 var result = await connection.QueryAsync<EmployeeDto>(sql, parameters);
@@ -91,7 +136,7 @@ namespace HrApp.Api.Controllers
             try
             {
                 using var connection = _connectionFactory.CreateHrConnection();
-                var sql = "SELECT DISTINCT Oddeleni FROM USER_MANAGEMENT.dbo.USERS WHERE Oddeleni IS NOT NULL AND Aktivni = 1 AND Oddeleni != '' ORDER BY Oddeleni";
+                var sql = "SELECT DISTINCT Oddeleni FROM USER_MANAGEMENT.dbo.USERS WHERE Oddeleni IS NOT NULL AND BIS_Aktivni = 1 AND Oddeleni != '' ORDER BY Oddeleni";
                 var depts = await connection.QueryAsync<string>(sql);
                 return Ok(new { success = true, data = depts });
             }
@@ -107,6 +152,8 @@ namespace HrApp.Api.Controllers
             try
             {
                 using var connection = _connectionFactory.CreateHrConnection();
+                await EnsureSchemaAsync(connection);
+                
                 var param = new { pn = Uri.UnescapeDataString(personalNumber) };
 
                 string sql = @"
@@ -116,10 +163,16 @@ namespace HrApp.Api.Controllers
                         ISNULL(u.BIS_Prijmeni, '')                           AS lastName,
                         ISNULL(u.Oddeleni, '')                               AS department,
                         ISNULL(CAST(u.Stredisko AS VARCHAR), '')             AS costCenter,
-                        ISNULL('(FRY) ' + w.WC_DESC, '')           AS wcName,
-                        ISNULL('(FRY) ' + w.WC_DESC, '')           AS workcenterName,
-                        ISNULL(e.Workcenter, '')                             AS workcenter,
-                        CAST(ISNULL(u.Aktivni, 0) AS BIT)                    AS isActive,
+                        ISNULL(CAST(u.Stredisko AS VARCHAR), '')             AS wcName,
+                        ISNULL(CAST(u.Stredisko AS VARCHAR), '')             AS workcenterName,
+                        ISNULL(CAST(u.Stredisko AS VARCHAR), '')             AS workcenter,
+                        ISNULL(
+                            CAST(u.Stredisko AS VARCHAR) +
+                            CASE WHEN ISNULL(e.WorkcenterDesc, '') <> ''
+                                 THEN ', ' + e.WorkcenterDesc ELSE '' END,
+                            ''
+                        )                                                    AS workcenterLabel,
+                        CAST(ISNULL(u.BIS_Aktivni, 0) AS BIT)                AS isActive,
                         CONVERT(varchar(10), e.HiringDate, 23)               AS hiringDate,
                         ISNULL(e.Phone, '')                                  AS phone,
                         ISNULL(u.EMail, ISNULL(e.Email, ''))                 AS email,
@@ -127,13 +180,14 @@ namespace HrApp.Api.Controllers
                         ISNULL(e.Level, '')                                  AS level,
                         ISNULL(u.User_Name, '')                              AS userName,
                         ISNULL(NULLIF(ISNULL(mgr_u.BIS_Jmeno + ' ' + mgr_u.BIS_Prijmeni, ''), ''), ISNULL(e.ManagerName, '—')) AS managerName
-                    FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL) u
+                    FROM (SELECT ID, BIS_Osobni_cislo, BIS_Jmeno, BIS_Prijmeni, Oddeleni, Stredisko, BIS_Aktivni, User_Name, EMail, BIS_Osoba_ID,
+                                 ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn
+                          FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL) u
                     LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
-                    LEFT JOIN FRYaddpm.dbo.WORKCENTERS w ON w.WORKCENTER = e.Workcenter
                     LEFT JOIN HR.dbo.EMPLOYEES mgr ON mgr.ID = e.ManagerID
-                    LEFT JOIN (SELECT BIS_Osoba_ID, BIS_Jmeno, BIS_Prijmeni, ROW_NUMBER() OVER(PARTITION BY BIS_Osoba_ID ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osoba_ID IS NOT NULL) mgr_u 
+                    LEFT JOIN (SELECT BIS_Osoba_ID, BIS_Jmeno, BIS_Prijmeni, ROW_NUMBER() OVER(PARTITION BY BIS_Osoba_ID ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osoba_ID IS NOT NULL) mgr_u
                         ON mgr_u.BIS_Osoba_ID = mgr.BIS_Osoba_ID AND mgr_u.rn = 1
-                    WHERE u.BIS_Osobni_cislo = @pn AND u.rn = 1 AND u.Aktivni = 1";
+                    WHERE u.BIS_Osobni_cislo = @pn AND u.rn = 1";
 
                 var result = await connection.QueryFirstOrDefaultAsync(sql, param);
 
