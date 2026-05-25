@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, Check } from "lucide-react";
 import * as xlsx from "xlsx";
 import { TrainingV2 } from "./TrainingsClientV2";
 import AddTrainingRecordModalV2 from "./AddTrainingRecordModalV2";
@@ -13,11 +13,16 @@ interface EmployeeStatus {
     lastName: string;
     personalNumber: string;
     department: string;
+    workcenter: string;
+    category: string;
+    costNumber: string;
+    costNumberDesc: string;
     hasCompleted: boolean;
     completionDate: string | null;
     expirationDate: string | null;
-    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace' | 'Neproškolen';
+    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace';
     isLegalOrExternal: boolean;
+    hiringDate: string | null;
 }
 
 interface Props {
@@ -33,8 +38,15 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
     const [showAddModal, setShowAddModal] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
-    const [filterType, setFilterType] = useState<"Vše" | "Interní" | "Zákonné / Externí">("Vše");
-    const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace" | "Neproškolen">("Vše");
+    const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace">("Vše");
+    const [selectedWorkcenters, setSelectedWorkcenters] = useState<Set<string>>(new Set());
+    const [isWorkcenterDropdownOpen, setIsWorkcenterDropdownOpen] = useState(false);
+    const workcenterDropdownRef = useRef<HTMLDivElement>(null);
+
+    const workcenters = useMemo(() => {
+        const wcs = new Set(employees.map(e => (e.workcenter || "").trim()).filter(Boolean));
+        return Array.from(wcs).sort() as string[];
+    }, [employees]);
 
     const loadDetail = () => {
         if (!trainingId) return;
@@ -56,6 +68,19 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
     };
 
     useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (workcenterDropdownRef.current && !workcenterDropdownRef.current.contains(event.target as Node)) {
+                setIsWorkcenterDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        setSearchQuery("");
+        setFilterStatus("Vše");
+        setSelectedWorkcenters(new Set());
         if (trainingId) {
             loadDetail();
         } else {
@@ -64,66 +89,70 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
         }
     }, [trainingId]);
 
-    const filteredEmployees = useMemo(() => {
-        let res = employees;
+    // Direct computation — no useMemo — guarantees table re-renders on every filter change
+    let filteredEmployees = employees;
 
-        if (searchQuery) {
-            const s = searchQuery.toLowerCase();
-            res = res.filter(emp =>
-                emp.firstName.toLowerCase().includes(s) ||
-                emp.lastName.toLowerCase().includes(s) ||
-                (emp.personalNumber && emp.personalNumber.toLowerCase().includes(s))
-            );
-        }
+    // Filter out employees with "Neproškolen" status (no training record)
+    filteredEmployees = filteredEmployees.filter(emp => (emp.validityStatus || "").trim() !== "Neproškolen");
 
-        if (filterType !== "Vše") {
-            if (filterType === "Interní") {
-                res = res.filter(emp => emp.hasCompleted && !emp.isLegalOrExternal);
-            } else if (filterType === "Zákonné / Externí") {
-                res = res.filter(emp => emp.hasCompleted && emp.isLegalOrExternal);
-            }
-        }
+    if (searchQuery) {
+        const s = searchQuery.toLowerCase();
+        filteredEmployees = filteredEmployees.filter(emp =>
+            emp.firstName.toLowerCase().includes(s) ||
+            emp.lastName.toLowerCase().includes(s) ||
+            (emp.personalNumber && emp.personalNumber.toLowerCase().includes(s))
+        );
+    }
 
-        if (filterStatus !== "Vše") {
-            res = res.filter(emp => emp.validityStatus === filterStatus);
-        }
+    if (filterStatus !== "Vše") {
+        filteredEmployees = filteredEmployees.filter(emp => {
+            const empStatus = (emp.validityStatus || "").trim();
+            return empStatus === filterStatus;
+        });
+    }
 
-        return res;
-    }, [employees, searchQuery, filterType, filterStatus]);
+    if (selectedWorkcenters.size > 0) {
+        filteredEmployees = filteredEmployees.filter(emp => selectedWorkcenters.has((emp.workcenter || "").trim()));
+    }
 
     const handleExportExcel = () => {
         if (filteredEmployees.length === 0) return;
 
+        const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('cs-CZ') : '';
+
         const data = filteredEmployees.map(emp => ({
-            'Příjmení a jméno': `${emp.lastName} ${emp.firstName}`,
             'Osobní číslo': emp.personalNumber || '',
-            'Oddělení': emp.department,
-            'Datum absolvování': emp.completionDate ? new Date(emp.completionDate).toLocaleDateString('cs-CZ') : '',
-            'Datum platnosti': emp.expirationDate ? new Date(emp.expirationDate).toLocaleDateString('cs-CZ') : '',
-            'Zákonné / Externí': emp.hasCompleted ? (emp.isLegalOrExternal ? 'Ano' : 'Ne') : '',
-            'Stav': emp.validityStatus
+            'Příjmení': emp.lastName,
+            'Jméno': emp.firstName,
+            'Kategorie zaměstnance': emp.category || '',
+            'Nákladové středisko – číslo': emp.costNumber || '',
+            'Nákladové středisko – popis': emp.costNumberDesc || '',
+            'Kategorie školení': training?.categoryName || '',
+            'Název školení': training?.name || '',
+            'Datum absolvování': fmt(emp.completionDate),
+            'Datum platné do': fmt(emp.expirationDate),
+            'Perioda (měsíce)': training?.periodicityMonths ?? '',
+            'Platné': emp.validityStatus === 'Platné' ? 'A' : 'N',
         }));
 
         const ws = xlsx.utils.json_to_sheet(data);
-        const wscols = [
-            { wch: 25 },
-            { wch: 15 },
-            { wch: 20 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 15 }
+        ws['!cols'] = [
+            { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 20 },
+            { wch: 24 }, { wch: 28 }, { wch: 22 }, { wch: 30 },
+            { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 8 },
         ];
-        ws['!cols'] = wscols;
 
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, ws, "Záznamy o školení");
-        
-        const fileName = `skoleni_${training?.name || 'export'}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        xlsx.writeFile(wb, fileName);
+
+        const safeName = (training?.name || 'export').replace(/[/\\?%*:|"<>]/g, '-');
+        const dateStr = new Date().toISOString().split('T')[0];
+        xlsx.writeFile(wb, `${safeName}_${dateStr}.xlsx`);
     };
 
     if (!trainingId) return null;
+
+    const isFiltered = searchQuery || filterStatus !== "Vše" || selectedWorkcenters.size > 0;
 
     return (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-black/40 backdrop-blur-sm overflow-hidden" onClick={onClose}>
@@ -169,6 +198,14 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                         <p className="text-sm font-medium text-gray-500">
                             Seznam zaměstnanců a platnost školení:
+                            {!loading && (
+                                <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                                    {isFiltered
+                                        ? `${filteredEmployees.length} z ${employees.length}`
+                                        : `${employees.length}`
+                                    }
+                                </span>
+                            )}
                         </p>
                         <div className="flex items-center gap-2">
                             <button
@@ -198,7 +235,7 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                 <input
                                     type="text"
-                                    placeholder="Vyhledat zaměstnance..."
+                                    placeholder="Vyhledat zaměstnance..."
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
                                     className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -207,25 +244,50 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                             <div className="flex items-center gap-2 sm:w-auto">
                                 <Filter size={15} className="text-gray-400" />
                                 <select
-                                    value={filterType}
-                                    onChange={e => setFilterType(e.target.value as any)}
-                                    className="rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-8 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                >
-                                    <option value="Vše">Všechny druhy</option>
-                                    <option value="Interní">Pouze Interní</option>
-                                    <option value="Zákonné / Externí">Pouze Zákonné / Externí</option>
-                                </select>
-                                <select
                                     value={filterStatus}
                                     onChange={e => setFilterStatus(e.target.value as any)}
                                     className="rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-8 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 >
                                     <option value="Vše">Všechny statusy</option>
                                     <option value="Platné">Platné</option>
-                                    <option value="Neplatné">Neplatné</option>
+                                    <option value="Neplatné">Propadlé</option>
                                     <option value="Blíží se expirace">Blíží se expirace</option>
-                                    <option value="Neproškolen">Neproškolen</option>
                                 </select>
+                                <div ref={workcenterDropdownRef} className="relative flex items-center gap-2">
+                                    <Building2 size={15} className="text-gray-400" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsWorkcenterDropdownOpen(!isWorkcenterDropdownOpen)}
+                                        className="rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-8 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-left min-w-[150px]"
+                                    >
+                                        {selectedWorkcenters.size === 0 ? "Všechna střediska" : `Vybráno: ${selectedWorkcenters.size}`}
+                                    </button>
+                                    {isWorkcenterDropdownOpen && (
+                                        <div className="absolute top-full mt-1 left-0 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg z-[60] min-w-[200px]">
+                                            {workcenters.map(wc => (
+                                                <button
+                                                    key={wc}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newSet = new Set(selectedWorkcenters);
+                                                        if (newSet.has(wc)) {
+                                                            newSet.delete(wc);
+                                                        } else {
+                                                            newSet.add(wc);
+                                                        }
+                                                        setSelectedWorkcenters(newSet);
+                                                    }}
+                                                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-100 transition-colors text-left text-sm"
+                                                >
+                                                    <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all ${selectedWorkcenters.has(wc) ? "border-blue-600 bg-blue-600" : "border-gray-300 bg-white"}`}>
+                                                        {selectedWorkcenters.has(wc) && <Check size={10} strokeWidth={3} className="text-white" />}
+                                                    </span>
+                                                    <span className="text-gray-700">{wc}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -244,65 +306,50 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                             <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                        <th className="px-6 py-4">Zaměstnanec</th>
-                                        <th className="px-6 py-4 hidden sm:table-cell">Absolvováno</th>
-                                        <th className="px-6 py-4 hidden md:table-cell">Platnost do</th>
-                                        <th className="px-6 py-4 text-center">Druh školení</th>
-                                        <th className="px-6 py-4 text-right">Status</th>
+                                        <th className="px-4 py-4">Os. číslo</th>
+                                        <th className="px-4 py-4">Příjmení</th>
+                                        <th className="px-4 py-4">Jméno</th>
+                                        <th className="px-4 py-4">Nákladové středisko</th>
+                                        <th className="px-4 py-4">Nákladové středisko popis</th>
+                                        <th className="px-4 py-4">Absolvováno</th>
+                                        <th className="px-4 py-4">Platnost do</th>
+                                        <th className="px-4 py-4 text-right">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredEmployees.map((emp) => (
-                                        <tr key={emp.employeeId} className="transition-colors hover:bg-blue-50/40">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-xs font-bold text-blue-700">
-                                                        {emp.lastName.charAt(0)}{emp.firstName.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-semibold text-gray-900 text-sm">
-                                                            {emp.firstName} {emp.lastName}
-                                                        </div>
-                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                            <code className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-blue-700">
-                                                                {emp.personalNumber || "N/A"}
-                                                            </code>
-                                                            <span className="text-xs text-gray-500 truncate max-w-[120px]">
-                                                                {emp.department}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        <tr key={emp.personalNumber} className="transition-colors hover:bg-blue-50/40">
+                                            <td className="px-4 py-3">
+                                                <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono font-semibold text-blue-700">
+                                                    {emp.personalNumber || '—'}
+                                                </code>
                                             </td>
-                                            <td className="px-6 py-4 hidden sm:table-cell text-sm text-gray-700 font-medium">
+                                            <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                                                {emp.lastName}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                                {emp.firstName}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">
+                                                {emp.costNumber || '—'}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">
+                                                {emp.costNumberDesc || '—'}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700 font-medium">
                                                 {emp.completionDate ? new Date(emp.completionDate).toLocaleDateString("cs-CZ") : '—'}
                                             </td>
-                                            <td className="px-6 py-4 hidden md:table-cell text-sm text-gray-700 font-medium">
+                                            <td className="px-4 py-3 text-sm text-gray-700 font-medium">
                                                 {emp.expirationDate ? new Date(emp.expirationDate).toLocaleDateString("cs-CZ") : '—'}
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                {emp.hasCompleted ? (
-                                                    emp.isLegalOrExternal ? (
-                                                        <span className="inline-flex items-center rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20 whitespace-nowrap">
-                                                            Zákonné / Externí
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center rounded-lg bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
-                                                            Interní
-                                                        </span>
-                                                    )
-                                                ) : (
-                                                    <span className="text-gray-400">—</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-4 py-3 text-right">
                                                 <StatusBadge status={emp.validityStatus} />
                                             </td>
                                         </tr>
                                     ))}
                                     {filteredEmployees.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="py-12 text-center text-sm text-gray-400">
+                                            <td colSpan={8} className="py-12 text-center text-sm text-gray-400">
                                                 Nenalezeny žádné záznamy pro dané filtry.
                                             </td>
                                         </tr>
@@ -319,6 +366,7 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                 <AddTrainingRecordModalV2
                     trainingId={trainingId}
                     periodicityMonths={training?.periodicityMonths || 0}
+                    isLegalOrExternal={!!(training?.isLegal || training?.isExternal)}
                     employees={employees}
                     onClose={() => setShowAddModal(false)}
                     onSaved={() => {
@@ -342,7 +390,7 @@ function StatusBadge({ status }: { status: string }) {
     if (status === 'Neplatné') {
         return (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10">
-                <AlertTriangle size={14} /> Neplatné
+                <AlertTriangle size={14} /> Propadlé
             </span>
         );
     }
@@ -353,9 +401,5 @@ function StatusBadge({ status }: { status: string }) {
             </span>
         );
     }
-    return (
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
-            Neproškolen
-        </span>
-    );
+    return null;
 }
