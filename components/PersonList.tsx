@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useDeferredValue } from "react";
 import Link from "next/link";
 import { Search, ChevronRight } from "lucide-react";
 import { Employee } from "@/types/employee";
@@ -25,10 +25,11 @@ export default function PersonList({
     filterControls,
 }: PersonListProps) {
     const [search, setSearch] = useState("");
+    const deferredSearch = useDeferredValue(search);
 
     const filtered = useMemo(() => {
-        if (!search) return employees;
-        const s = search.toLowerCase();
+        if (!deferredSearch) return employees;
+        const s = deferredSearch.toLowerCase();
         return employees.filter(
             (e) =>
                 e.firstName.toLowerCase().includes(s) ||
@@ -36,7 +37,7 @@ export default function PersonList({
                 e.personalNumber.toLowerCase().includes(s) ||
                 e.department.toLowerCase().includes(s)
         );
-    }, [employees, search]);
+    }, [employees, deferredSearch]);
 
     return (
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -99,12 +100,12 @@ export default function PersonList({
                                     <div className="flex items-center gap-4">
                                         {/* Avatar placeholder */}
                                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-sm font-bold text-blue-700">
-                                            {emp.firstName.charAt(0)}{emp.lastName.charAt(0)}
+                                            {emp.lastName.charAt(0)}{emp.firstName.charAt(0)}
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-semibold text-gray-900">
-                                                    {emp.firstName} {emp.lastName}
+                                                    {emp.lastName} {emp.firstName}
                                                 </span>
                                                 <code className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono font-semibold text-blue-700">
                                                     {emp.personalNumber}

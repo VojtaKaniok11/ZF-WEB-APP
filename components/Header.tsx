@@ -3,10 +3,25 @@
 import { useState } from "react";
 import Link from "next/link";
 import NavigationMenu from "./NavigationMenu";
+import { useAuth } from "@/lib/auth";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const { user, logout } = useAuth();
+    const router = useRouter();
+    const pathname = usePathname();
+
+    if (pathname === "/login") return null;
+
+    const handleAuthClick = () => {
+        if (user) {
+            logout();
+            router.push("/");
+        } else {
+            router.push("/login");
+        }
+    };
 
     return (
         <>
@@ -48,16 +63,17 @@ export default function Header() {
 
                 {/* Right — Login button */}
                 <button
-                    onClick={() => setIsLoggedIn((prev) => !prev)}
-                    className="flex items-center gap-2 rounded-lg border border-white/30 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10 active:bg-white/20"
+                    onClick={handleAuthClick}
+                    className="flex items-center gap-2 rounded-lg border border-white/30 px-3 py-2 text-xs font-medium text-white transition-all hover:bg-white/10 active:bg-white/20 sm:px-4 sm:text-sm"
                     id="login-btn"
                 >
-                    {isLoggedIn ? (
+                    {user ? (
                         <>
+                            <span className="hidden opacity-80 sm:inline">Vítejte, {user.displayName}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-4">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
                             </svg>
-                            Odhlásit
+                            <span className="sm:hidden">Odhlásit</span>
                         </>
                     ) : (
                         <>

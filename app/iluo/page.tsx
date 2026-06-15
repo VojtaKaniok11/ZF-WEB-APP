@@ -13,6 +13,7 @@ interface IluoEmployee {
     department: string;
     skillCount: number;
     expertLevelCount: number; // Level 'O'
+    hiringDate: string | null;
 }
 
 export default function IluoPage() {
@@ -32,10 +33,10 @@ export default function IluoPage() {
     }, []);
 
     const filtered = employees.filter(e => 
-        e.firstName.toLowerCase().includes(search.toLowerCase()) ||
-        e.lastName.toLowerCase().includes(search.toLowerCase()) ||
-        e.personalNumber.includes(search) ||
-        e.department.toLowerCase().includes(search.toLowerCase())
+        (e.firstName?.toLowerCase() || "").includes(search.toLowerCase()) ||
+        (e.lastName?.toLowerCase() || "").includes(search.toLowerCase()) ||
+        (e.personalNumber || "").includes(search) ||
+        (e.department?.toLowerCase() || "").includes(search.toLowerCase())
     );
 
     if (loading) {
@@ -104,6 +105,7 @@ export default function IluoPage() {
                             <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                 <th className="px-6 py-4">Zaměstnanec</th>
                                 <th className="px-6 py-4">Oddělení</th>
+                                <th className="px-6 py-4">Nástup</th>
                                 <th className="px-6 py-4 text-center">Počet dovedností</th>
                                 <th className="px-6 py-4 text-center">Expertní (O)</th>
                                 <th className="px-6 py-4 text-right"></th>
@@ -111,11 +113,11 @@ export default function IluoPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filtered.map((emp) => (
-                                <tr key={emp.id} className="group transition-colors hover:bg-violet-50/30">
+                                <tr key={emp.personalNumber} className="group transition-colors hover:bg-violet-50/30">
                                     <td className="px-6 py-4">
                                         <Link href={`/iluo/detail?pn=${emp.personalNumber}`} className="flex items-center gap-3">
                                             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
-                                                {emp.lastName.charAt(0)}{emp.firstName.charAt(0)}
+                                                {(emp.lastName?.charAt(0) || "?")}{(emp.firstName?.charAt(0) || "?")}
                                             </div>
                                             <div>
                                                 <div className="text-sm font-semibold text-gray-900">{emp.lastName} {emp.firstName}</div>
@@ -124,6 +126,9 @@ export default function IluoPage() {
                                         </Link>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{emp.department}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-500 tabular-nums">
+                                        {emp.hiringDate ? new Date(emp.hiringDate).toLocaleDateString("cs-CZ") : '—'}
+                                    </td>
                                     <td className="px-6 py-4 text-center">
                                         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{emp.skillCount}</span>
                                     </td>

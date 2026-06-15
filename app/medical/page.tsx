@@ -30,3 +30,4 @@ export default function MedicalPage() {
 
     return <MedicalClient employees={employees} />;
 }
+

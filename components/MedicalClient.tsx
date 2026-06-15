@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronRight, Download, Loader2, Plus } from "lucide-react";
+import { Search, Download, Loader2, Plus } from "lucide-react";
+import * as xlsx from "xlsx";
 import MedicalDetailModal from "./MedicalDetailModal";
 import { getApiUrl } from "@/lib/constants";
-
 import { Employee } from "@/types/employee";
 import CreateMedicalTypeModal from "./CreateMedicalTypeModal";
 
@@ -14,6 +14,7 @@ export interface MedicalTypeV2 {
     description: string;
     validityMonths: number;
     category: string;
+    medicalFacility: string;
 }
 
 interface Props {
@@ -27,7 +28,9 @@ export default function MedicalClient({ employees }: Props) {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
-    const [exporting, setExporting] = useState(false);
+    const [exportingCatalog, setExportingCatalog] = useState(false);
+    const [exportingEmployees, setExportingEmployees] = useState(false);
+    const [noteModal, setNoteModal] = useState<string | null>(null);
 
     const categories = useMemo(() => {
         const cats = new Set(types.map((t) => t.category));
@@ -40,9 +43,7 @@ export default function MedicalClient({ employees }: Props) {
         fetch(`${apiUrl}/medical-types`)
             .then((res) => res.json())
             .then((data) => {
-                if (data.success) {
-                    setTypes(data.data);
-                }
+                if (data.success) setTypes(data.data);
                 setLoading(false);
             })
             .catch((err) => {
@@ -57,46 +58,78 @@ export default function MedicalClient({ employees }: Props) {
 
     const filtered = useMemo(() => {
         let res = types;
-        
-        if (selectedCategory !== "Vše") {
-            res = res.filter((t) => t.category === selectedCategory);
-        }
-        
+        if (selectedCategory !== "Vše") res = res.filter((t) => t.category === selectedCategory);
         if (search) {
             const s = search.toLowerCase();
-            res = res.filter(
-                (t) =>
-                    t.name.toLowerCase().includes(s) ||
-                    t.category.toLowerCase().includes(s)
-            );
+            res = res.filter(t => t.name.toLowerCase().includes(s) || t.category.toLowerCase().includes(s));
         }
-        
         return res;
     }, [types, search, selectedCategory]);
 
-    const handleExport = async () => {
+    const handleExportCatalog = () => {
+        if (filtered.length === 0) return;
+        setExportingCatalog(true);
         try {
-            setExporting(true);
-            const apiUrl = getApiUrl();
-            const response = await fetch(`${apiUrl}/medical/export`); // Note: need to implement this endpoint
-            if (!response.ok) throw new Error("Chyba při stahování Excelu.");
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = url;
-            a.download = `lekarske_prohlidky_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error("Export selhal:", error);
-            alert("Export zatím není plně implementován pro tuto stránku.");
+            const data = filtered.map(t => ({
+                'Kategorie': t.category,
+                'Název prohlídky': t.name,
+                'Lékařské zařízení': t.medicalFacility || '',
+                'Perioda (měsíce)': t.validityMonths,
+                'Poznámka': t.description || '',
+            }));
+            const ws = xlsx.utils.json_to_sheet(data);
+            ws['!cols'] = [{ wch: 20 }, { wch: 35 }, { wch: 30 }, { wch: 16 }, { wch: 45 }];
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, "Katalog prohlídek");
+            xlsx.writeFile(wb, `katalog_prohlidek_${new Date().toISOString().split('T')[0]}.xlsx`);
         } finally {
-            setExporting(false);
+            setExportingCatalog(false);
+        }
+    };
+
+    const handleExportEmployees = async () => {
+        setExportingEmployees(true);
+        try {
+            const apiUrl = getApiUrl();
+            const params = new URLSearchParams();
+            if (selectedCategory !== "Vše") params.set("category", selectedCategory);
+            if (search) params.set("search", search);
+            const qs = params.toString();
+            const res = await fetch(`${apiUrl}/medical/export${qs ? `?${qs}` : ""}`);
+            const result = await res.json();
+            if (!result.success || !result.data) return;
+
+            const fmt = (d: string | null | undefined) =>
+                d ? new Date(d).toLocaleDateString('cs-CZ') : '';
+
+            const data = result.data.map((row: Record<string, unknown>) => ({
+                'Osobní číslo': row.personalNumber ?? '',
+                'Příjmení': row.lastName ?? '',
+                'Jméno': row.firstName ?? '',
+                'Kategorie zaměstnance': row.employeeCategory ?? '',
+                'Nákladové středisko – číslo': row.costNumber ?? '',
+                'Nákladové středisko – popis': row.costNumberDesc ?? '',
+                'Kategorie prohlídky': row.examCategory ?? '',
+                'Název lékařské prohlídky': row.examName ?? '',
+                'Datum absolvování': fmt(row.completionDate as string | null),
+                'Datum platnosti': fmt(row.expirationDate as string | null),
+                'Perioda (měsíce)': row.periodicityMonths ?? '',
+                'Platné': row.isValid ?? 'N',
+            }));
+
+            const ws = xlsx.utils.json_to_sheet(data);
+            ws['!cols'] = [
+                { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 20 },
+                { wch: 24 }, { wch: 28 }, { wch: 20 }, { wch: 32 },
+                { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 8 },
+            ];
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, "Lékařské prohlídky");
+            xlsx.writeFile(wb, `lekarske_prohlidky_${new Date().toISOString().split('T')[0]}.xlsx`);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setExportingEmployees(false);
         }
     };
 
@@ -151,37 +184,54 @@ export default function MedicalClient({ employees }: Props) {
                 </div>
             </div>
 
-            {/* Count badge */}
+            {/* Count badge & Buttons */}
             <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
                     Nalezeno: {filtered.length} typů prohlídek
                 </span>
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0054A6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 cursor-pointer shrink-0"
-                >
-                    <Plus size={16} />
-                    Přidat prohlídku
-                </button>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <button
+                        onClick={handleExportCatalog}
+                        disabled={exportingCatalog || filtered.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:bg-green-50 hover:text-green-700 hover:border-green-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none shrink-0"
+                    >
+                        {exportingCatalog ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                        Export katalogu
+                    </button>
+                    <button
+                        onClick={handleExportEmployees}
+                        disabled={exportingEmployees}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                    >
+                        {exportingEmployees ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                        Export zaměstnanců
+                    </button>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0054A6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95 shrink-0"
+                    >
+                        <Plus size={16} />
+                        Přidat prohlídku
+                    </button>
+                </div>
             </div>
 
-            {/* List */}
+            {/* Table */}
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
                         <div className="mb-4 text-4xl text-gray-200">🔍</div>
-                        <p className="text-sm text-gray-500 mb-6">
-                            Žádná prohlídka nebyla nalezena.
-                        </p>
+                        <p className="text-sm text-gray-500">Žádná prohlídka nebyla nalezena.</p>
                     </div>
                 ) : (
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                <th className="px-6 py-4 w-1/2">Název prohlídky</th>
                                 <th className="px-6 py-4">Kategorie</th>
-                                <th className="px-6 py-4 text-right">Platnost (měsíců)</th>
-                                <th className="px-6 py-4 w-10"></th>
+                                <th className="px-6 py-4">Název prohlídky</th>
+                                <th className="px-6 py-4">Lékařské zařízení</th>
+                                <th className="px-6 py-4 text-right">Perioda (měsíců)</th>
+                                <th className="px-6 py-4">Poznámka</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -189,22 +239,37 @@ export default function MedicalClient({ employees }: Props) {
                                 <tr
                                     key={t.id}
                                     onClick={() => setSelectedTypeId(t.id)}
-                                    className="transition-colors hover:bg-blue-50/40 cursor-pointer group"
+                                    className="transition-colors hover:bg-blue-50/40 cursor-pointer"
                                 >
-                                    <td className="px-6 py-4">
-                                        <div className="font-semibold text-gray-900">{t.name}</div>
-                                        <div className="text-xs text-gray-500 mt-1 line-clamp-1">{t.description}</div>
-                                    </td>
                                     <td className="px-6 py-4">
                                         <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
                                             {t.category}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="text-sm font-medium text-gray-900">{t.validityMonths > 0 ? t.validityMonths : 'N/A'}</span>
+                                    <td className="px-6 py-4">
+                                        <div className="font-semibold text-gray-900">{t.name}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-sm text-gray-700">
+                                            {t.medicalFacility || '—'}
+                                        </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <ChevronRight size={18} className="text-gray-300 group-hover:text-blue-500 transition-colors inline-block" />
+                                        <span className="text-sm font-medium text-gray-900">
+                                            {t.validityMonths > 0 ? t.validityMonths : '—'}
+                                        </span>
+                                    </td>
+                                    <td
+                                        className="px-6 py-4"
+                                        onClick={(e) => {
+                                            if (!t.description) return;
+                                            e.stopPropagation();
+                                            setNoteModal(t.description);
+                                        }}
+                                    >
+                                        <span className={`text-sm line-clamp-1 ${t.description ? "text-blue-600 underline decoration-dotted cursor-pointer hover:text-blue-800" : "text-gray-400"}`}>
+                                            {t.description || '—'}
+                                        </span>
                                     </td>
                                 </tr>
                             ))}
@@ -227,6 +292,29 @@ export default function MedicalClient({ employees }: Props) {
                         loadTypes();
                     }}
                 />
+            )}
+
+            {noteModal !== null && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+                    onClick={() => setNoteModal(null)}
+                >
+                    <div
+                        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-base font-semibold text-gray-900">Poznámka</h3>
+                            <button
+                                onClick={() => setNoteModal(null)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="size-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{noteModal}</p>
+                    </div>
+                </div>
             )}
         </div>
     );

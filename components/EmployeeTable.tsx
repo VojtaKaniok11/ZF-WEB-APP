@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Eye } from "lucide-react";
 import { Employee } from "@/types/employee";
 
 interface EmployeeTableProps {
@@ -28,85 +27,107 @@ export default function EmployeeTable({
         });
     }
 
+    // Column definitions: label, width hint, alignment
+    const thClass = "px-2.5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap";
+    const tdBase = "px-2.5 py-2.5 whitespace-nowrap text-sm";
+
     return (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
-                <table className="w-full text-[0.9rem]">
+                <table className="w-full text-[0.82rem]">
                     <thead>
                         <tr className="border-b border-gray-200 bg-gray-50/80">
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Osobní číslo
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Jméno
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Příjmení
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Oddělení
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Pracoviště
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Nástup
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Stav
-                            </th>
-                            <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Prací program
-                            </th>
-                            <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                                Profil
-                            </th>
+                            {/* Osobní číslo */}
+                            <th className={thClass} style={{ width: "90px" }}>Os. číslo</th>
+                            {/* Příjmení */}
+                            <th className={thClass} style={{ width: "140px" }}>Příjmení</th>
+                            {/* Jméno */}
+                            <th className={thClass} style={{ width: "120px" }}>Jméno</th>
+                            {/* Kategorie */}
+                            <th className={thClass} style={{ width: "110px" }}>Kategorie</th>
+                            {/* Kmenové středisko */}
+                            <th className={thClass} style={{ width: "110px" }}>Kmen. středisko číslo</th>
+                            {/* Kmenové středisko popis */}
+                            <th className={thClass} style={{ width: "160px" }}>Kmen. středisko popis</th>
+                            {/* Nákladové číslo */}
+                            <th className={thClass} style={{ width: "110px" }}>Nákladové číslo</th>
+                            <th className={thClass} style={{ width: "160px" }}>Nákladové středisko popis</th>
+                            {/* Stav */}
+                            <th className={thClass} style={{ width: "80px" }}>Stav</th>
+                            {/* Prací program */}
+                            <th className={thClass} style={{ width: "80px" }}>Prací progr.</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {employees.map((emp) => (
                             <tr
                                 key={emp.id}
-                                className="transition-colors hover:bg-blue-50/40"
+                                onClick={() => onViewDetail(emp.personalNumber)}
+                                className="cursor-pointer transition-colors hover:bg-blue-50/60 group"
+                                title={`Otevřít profil: ${emp.firstName} ${emp.lastName}`}
                             >
-                                <td className="whitespace-nowrap px-5 py-3.5">
-                                    <code className="rounded bg-gray-100 px-2 py-0.5 text-xs font-mono font-semibold text-blue-700">
-                                        {emp.personalNumber}
+                                {/* Osobní číslo */}
+                                <td className={tdBase}>
+                                    <code className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-mono font-semibold text-blue-700 group-hover:bg-blue-100">
+                                        {emp.personalNumber || "—"}
                                     </code>
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-700">
-                                    {emp.firstName}
+
+                                {/* Příjmení */}
+                                <td className={`${tdBase} font-semibold text-gray-900`}>
+                                    {emp.lastName || "—"}
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 font-semibold text-gray-900">
-                                    {emp.lastName}
+
+                                {/* Jméno */}
+                                <td className={`${tdBase} text-gray-700`}>
+                                    {emp.firstName || "—"}
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-600">
-                                    {emp.department}
+
+                                {/* Kategorie (z DB) */}
+                                <td className={`${tdBase} text-gray-600`}>
+                                    {emp.category || <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-600">
-                                    {emp.workcenterName || "—"}
+
+                                {/* Kmenové středisko číslo = workcenter */}
+                                <td className={`${tdBase} text-gray-600 tabular-nums`}>
+                                    {emp.workcenter || <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 text-gray-500 tabular-nums">
-                                    {formatDate(emp.hiringDate)}
+
+                                {/* Kmenové středisko popis = workcenterName (z STREDISKO_POPIS dle kmen. čísla) */}
+                                <td className={`${tdBase} text-gray-600`}>
+                                    {emp.workcenterName || <span className="text-gray-300">—</span>}
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5">
-                                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${emp.isActive ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-red-50 text-red-700 ring-red-600/20'}`}>
-                                        {emp.isActive ? 'Aktivní' : 'Neaktivní'}
+
+                                {/* Nákladové číslo (z DB) */}
+                                <td className={`${tdBase} text-gray-600 tabular-nums`}>
+                                    {emp.costNumber || <span className="text-gray-300">—</span>}
+                                </td>
+
+                                {/* Nákladové středisko popis */}
+                                <td className={`${tdBase} text-gray-600`}>
+                                    {emp.costNumberDesc || <span className="text-gray-300">—</span>}
+                                </td>
+
+                                {/* Stav */}
+                                <td className={tdBase}>
+                                    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                                        emp.isActive
+                                            ? "bg-green-50 text-green-700 ring-green-600/20"
+                                            : "bg-red-50 text-red-600 ring-red-600/20"
+                                    }`}>
+                                        {emp.isActive ? "Aktivní" : "Neaktivní"}
                                     </span>
                                 </td>
-                                <td className="whitespace-nowrap px-5 py-3.5">
-                                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${emp.hasWashingProgram ? 'bg-blue-50 text-blue-700 ring-blue-600/20' : 'bg-gray-50 text-gray-600 ring-gray-500/10'}`}>
-                                        {emp.hasWashingProgram ? 'Ano' : 'Ne'}
+
+                                {/* Prací program */}
+                                <td className={tdBase}>
+                                    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                                        emp.hasWashingProgram
+                                            ? "bg-blue-50 text-blue-700 ring-blue-600/20"
+                                            : "bg-gray-50 text-gray-500 ring-gray-500/10"
+                                    }`}>
+                                        {emp.hasWashingProgram ? "Ano" : "Ne"}
                                     </span>
-                                </td>
-                                <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                    <button
-                                        onClick={() => onViewDetail(emp.personalNumber)}
-                                        className="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-blue-600 transition-all hover:bg-blue-50 hover:text-blue-700 active:scale-95"
-                                    >
-                                        <Eye size={15} />
-                                        Profil
-                                    </button>
                                 </td>
                             </tr>
                         ))}

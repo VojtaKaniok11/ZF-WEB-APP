@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronRight, Download, Loader2, Plus } from "lucide-react";
+import { Search, ChevronRight, Loader2, Plus } from "lucide-react";
 import OoppDetailModal from "./OoppDetailModal";
 import { getApiUrl } from "@/lib/constants";
 import { Employee } from "@/types/employee";
@@ -24,7 +24,7 @@ export default function OoppClient({ employees }: Props) {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string>("Vše");
-    const [exporting, setExporting] = useState(false);
+
 
     const categories = useMemo(() => {
         const cats = new Set(items.map((t) => t.category));
@@ -71,31 +71,7 @@ export default function OoppClient({ employees }: Props) {
         return res;
     }, [items, search, selectedCategory]);
 
-    const handleExport = async () => {
-        try {
-            setExporting(true);
-            const apiUrl = getApiUrl();
-            const response = await fetch(`${apiUrl}/oopp/export`); // Note: need to implement this endpoint
-            if (!response.ok) throw new Error("Chyba při stahování Excelu.");
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = url;
-            a.download = `oopp_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error("Export selhal:", error);
-            alert("Export zatím není plně implementován pro tuto stránku.");
-        } finally {
-            setExporting(false);
-        }
-    };
+
 
     if (loading) {
         return (

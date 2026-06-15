@@ -4,9 +4,16 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <DefaultItemExcludes>$(DefaultItemExcludes);NewWeb\**;publish\**;out\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="start.bat" CopyToPublishDirectory="Always" />
+    <None Include="spustit.bat" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.102.2" />
     <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.24" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />

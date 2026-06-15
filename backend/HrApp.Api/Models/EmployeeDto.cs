@@ -9,6 +9,9 @@ namespace HrApp.Api.Models
         public string Department { get; set; } = string.Empty;
         public string Workcenter { get; set; } = string.Empty;
         public string WorkcenterName { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string CostNumber { get; set; } = string.Empty;
+        public string CostNumberDesc { get; set; } = string.Empty;
         public DateTime? HiringDate { get; set; }
         public bool IsActive { get; set; }
         public bool HasWashingProgram { get; set; }
@@ -18,5 +21,6 @@ namespace HrApp.Api.Models
         public string CardNumber { get; set; } = string.Empty;
         public bool BisActive { get; set; }
         public int? BisOsobaId { get; set; }
+        public DateTime? LeavingDate { get; set; }
     }
 }

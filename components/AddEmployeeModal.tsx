@@ -17,6 +17,7 @@ const INITIAL_FORM: NewEmployeePayload = {
     lastName: "",
     department: "",
     costCenter: null,
+    category: "",
     hiringDate: null,
     isActive: true,
     phone: "",
@@ -293,7 +294,7 @@ export default function AddEmployeeModal({
                     </div>
                 </div>
 
-                {/* Row 7: BIS Osoba ID, Stav */}
+                {/* Row 7: BIS Osoba ID, Kategorie */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -307,6 +308,26 @@ export default function AddEmployeeModal({
                             className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         />
                     </div>
+                    <div>
+                        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            Kategorie
+                        </label>
+                        <select
+                            value={form.category ?? ""}
+                            onChange={(e) => updateField("category", e.target.value)}
+                            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                            <option value="">Vyberte kategorii</option>
+                            <option value="11">11 – Výroba</option>
+                            <option value="12">12 – Výroba</option>
+                            <option value="31">31 – Kancelář</option>
+                            <option value="41">41 – Kancelář</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Row 8: Stav */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-gray-700">
                             Stav

@@ -115,11 +115,14 @@ export default function EmployeeDetailModal({
                             <DetailItem label="Oddělení" value={data.department} />
                             <DetailItem label="Pozice" value={data.position} />
                             <DetailItem label="Úroveň" value={data.level} />
+                            <DetailItem label="Kmenové středisko" value={data.workcenterLabel || data.workcenter} />
+                            <DetailItem label="Nákladové středisko" value={data.costCenterLabel || data.costCenter} />
+                            <DetailItem label="Kategorie" value={data.category} />
+                            <DetailItem label="Nadřízený" value={data.managerName} />
                             <DetailItem
                                 label="Stav"
                                 value={<StatusBadge isActive={data.isActive} />}
                             />
-                            <DetailItem label="Nadřízený" value={data.managerName} />
                         </DetailGrid>
                     </DetailSection>
 

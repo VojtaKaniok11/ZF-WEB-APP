@@ -122,7 +122,9 @@ export default function EmployeeProfilePage({ params }: { params: Promise<{ pers
 
                 {/* Basic info grid */}
                 <div className="grid grid-cols-2 gap-4 border-t border-gray-200 px-6 py-5 sm:grid-cols-4">
-                    <InfoItem label="Pracoviště" value={employee.workcenterName} />
+                    <InfoItem label="Pracoviště" value={employee.workcenterLabel || employee.workcenterName} />
+                    <InfoItem label="Kategorie" value={employee.category ?? ""} />
+                    <InfoItem label="Nákladové středisko" value={employee.costCenterLabel || employee.costCenter || ""} />
                     <InfoItem label="Email" value={employee.email} />
                     <InfoItem label="Telefon" value={employee.phone} />
                     <InfoItem label="Nadřízený" value={employee.managerName} />

@@ -1,8 +1,12 @@
 using HrApp.Api.Data;
 using System.Text.Json.Serialization;
 
-var builder = WebApplication.CreateBuilder(args);
-
+var options = new WebApplicationOptions
+{
+    Args = args,
+    WebRootPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot")
+};
+var builder = WebApplication.CreateBuilder(options);
 // Add services to the container.
 builder.Services.AddControllers()
        .AddJsonOptions(options =>
@@ -46,10 +50,24 @@ if (app.Environment.IsDevelopment())
     app.UseCors("AllowNextJs");
 }
 
+// Define MIME types for Next.js assets
+var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+provider.Mappings[".js"] = "text/javascript";
+provider.Mappings[".css"] = "text/css";
+provider.Mappings[".woff2"] = "font/woff2";
+provider.Mappings[".woff"] = "font/woff";
+provider.Mappings[".ttf"] = "font/ttf";
+provider.Mappings[".json"] = "application/json";
+provider.Mappings[".txt"] = "text/plain"; // Next.js App Router payloads
+
 // Serve Next.js static export from wwwroot/
-// After build, copy contents of Next.js 'out/' folder into this app's 'wwwroot/' folder
-app.UseDefaultFiles();   // serves index.html for /
-app.UseStaticFiles();    // serves all static assets (_next/, images, etc.)
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = provider,
+    ServeUnknownFileTypes = true,
+    DefaultContentType = "application/octet-stream"
+});
 
 app.UseAuthorization();
 app.MapControllers();

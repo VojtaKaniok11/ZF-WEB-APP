@@ -100,9 +100,17 @@ export default function EmployeeProfilePage() {
         return new Date(d).toLocaleDateString("cs-CZ", { day: "2-digit", month: "2-digit", year: "numeric" });
     }
 
+    // Construct back URL with existing filters
+    const backParams = new URLSearchParams();
+    searchParams.forEach((val, key) => {
+        if (key !== "pn") backParams.set(key, val);
+    });
+    const backQs = backParams.toString();
+    const backUrl = backQs ? `/?${backQs}` : "/";
+
     return (
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-            <Link href="/" className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-[#0054A6]">
+            <Link href={backUrl} className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition-colors hover:text-[#0054A6]">
                 <ArrowLeft size={16} /> Zpět na přehled zaměstnanců
             </Link>
 
@@ -128,13 +136,19 @@ export default function EmployeeProfilePage() {
 
                 {/* Basic info grid */}
                 <div className="grid grid-cols-2 gap-4 border-t border-gray-200 px-6 py-5 sm:grid-cols-4">
-                    <InfoItem label="Pracoviště" value={employee.workcenterName} />
-                    <InfoItem label="Email" value={employee.email} />
-                    <InfoItem label="Telefon" value={employee.phone} />
-                    <InfoItem label="Nadřízený" value={employee.managerName} />
-                    <InfoItem label="Úroveň" value={employee.level} />
-                    <InfoItem label="Uživatel" value={employee.userName} />
+                    <InfoItem
+                        label="Kmen. středisko"
+                        value={
+                            employee.workcenter && employee.department
+                                ? `${employee.workcenter} - ${employee.department}`
+                                : employee.workcenterLabel || employee.workcenter || employee.workcenterName || "—"
+                        }
+                    />
+                    <InfoItem label="Nákladové středisko" value={employee.costCenterLabel || employee.costCenter || ""} />
+                    <InfoItem label="Kategorie" value={employee.category ?? ""} />
+                    <InfoItem label="Vedoucí / Docházkový vedoucí" value={employee.managerName} />
                 </div>
+
             </div>
 
             {/* ─── Dashboard cards grid ─── */}

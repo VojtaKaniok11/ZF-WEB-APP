@@ -106,9 +106,10 @@ namespace HrApp.Api.Controllers
                 var training = await connection.QueryFirstOrDefaultAsync(tSql, new { tid = id });
                 if (training == null) return NotFound(new { success = false });
 
-                string detailCostDescExpr = _hasUmCostDescCol
+                string detailCostDescFallback = _hasUmCostDescCol
                     ? "ISNULL(u.Nakladove_Stredisko_Popis, ISNULL(e.CostNumberDesc, ''))"
                     : "ISNULL(e.CostNumberDesc, '')";
+                string detailCostDescExpr = $"ISNULL(sp_cc.STREDISKO_POPIS, {detailCostDescFallback})";
 
                 string eSql = $@"
                     SELECT e.ID AS employeeId, ISNULL(u.BIS_Jmeno, '') AS firstName, ISNULL(u.BIS_Prijmeni, '') AS lastName,
@@ -126,6 +127,7 @@ namespace HrApp.Api.Controllers
                     FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn
                           FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL AND BIS_Aktivni = 1) u
                     LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
+                    LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
                     OUTER APPLY (
                         SELECT TOP 1 1 AS HasCompleted, tr.CompletionDate, tr.ExpirationDate, tr.IsLegalOrExternal
                         FROM dbo.TRAINING_RECORDS tr
@@ -134,6 +136,7 @@ namespace HrApp.Api.Controllers
                         ORDER BY tr.CompletionDate DESC
                     ) tr
                     WHERE u.rn = 1 AND u.BIS_Aktivni = 1
+                      AND tr.HasCompleted IS NOT NULL
                     ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
 
                 var employees = await connection.QueryAsync(eSql, new { tid = id });
@@ -457,6 +460,9 @@ namespace HrApp.Api.Controllers
 
                 foreach (var empId in empIds)
                 {
+                    await connection.ExecuteAsync(
+                        "DELETE FROM dbo.TRAINING_RECORDS WHERE EmployeeID = @empId AND TrainingID = @trainId",
+                        new { empId, trainId = body.TrainingId });
                     int id = await connection.QuerySingleAsync<int>(@"
                         INSERT INTO dbo.TRAINING_RECORDS (EmployeeID, TrainingID, CompletionDate, ExpirationDate, IsLegalOrExternal)
                         OUTPUT INSERTED.ID VALUES (@empId, @trainId, @compDate, @expDate, @isExt)",
@@ -546,6 +552,58 @@ namespace HrApp.Api.Controllers
             if (date == null) return "";
             if (date is DateTime dt) return dt.ToString("dd.MM.yyyy");
             return "";
+        }
+
+        [HttpGet("{id:int}/employees-for-record")]
+        public async Task<IActionResult> GetEmployeesForRecordByStatus(int id)
+        {
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                await EnsureCatalogSchemaAsync(connection);
+
+                string detailCostDescFallback = _hasUmCostDescCol
+                    ? "ISNULL(u.Nakladove_Stredisko_Popis, ISNULL(e.CostNumberDesc, ''))"
+                    : "ISNULL(e.CostNumberDesc, '')";
+                string detailCostDescExpr = $"ISNULL(sp_cc.STREDISKO_POPIS, {detailCostDescFallback})";
+
+                string sql = $@"
+                    SELECT e.ID AS employeeId, ISNULL(u.BIS_Jmeno, '') AS firstName, ISNULL(u.BIS_Prijmeni, '') AS lastName,
+                        ISNULL(u.BIS_Osobni_cislo, '') AS personalNumber, ISNULL(u.Oddeleni, '') AS department,
+                        ISNULL(CAST(u.Stredisko AS VARCHAR), '') AS workcenter, e.HiringDate AS hiringDate,
+                        ISNULL(CAST(u.Kategorie AS VARCHAR), ISNULL(e.Category, '')) AS category,
+                        ISNULL(CAST(u.Nakladove_Stredisko AS VARCHAR), ISNULL(e.CostNumber, '')) AS costNumber,
+                        {detailCostDescExpr} AS costNumberDesc,
+                        CAST(ISNULL(tr.HasCompleted, 0) AS BIT) AS hasCompleted, tr.CompletionDate AS completionDate,
+                        tr.ExpirationDate AS expirationDate, CAST(ISNULL(tr.IsLegalOrExternal, 0) AS BIT) AS isLegalOrExternal,
+                        CASE WHEN tr.HasCompleted IS NULL THEN 'Neproškolen'
+                             WHEN tr.ExpirationDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné'
+                             WHEN DATEDIFF(day, CAST(SYSDATETIME() AS DATE), tr.ExpirationDate) <= 30 THEN 'Blíží se expirace'
+                             ELSE 'Platné' END AS validityStatus
+                    FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn
+                          FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL AND BIS_Aktivni = 1) u
+                    LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
+                    LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
+                    OUTER APPLY (
+                        SELECT TOP 1 1 AS HasCompleted, tr.CompletionDate, tr.ExpirationDate, tr.IsLegalOrExternal
+                        FROM dbo.TRAINING_RECORDS tr
+                        JOIN dbo.EMPLOYEES e_inner ON e_inner.ID = tr.EmployeeID
+                        WHERE e_inner.PersonalNumber = u.BIS_Osobni_cislo AND tr.TrainingID = @tid
+                        ORDER BY tr.CompletionDate DESC
+                    ) tr
+                    WHERE u.rn = 1 AND u.BIS_Aktivni = 1
+                      AND CAST(u.Kategorie AS VARCHAR) IN ('11','12','31','41')
+                      AND ISNULL(CAST(u.Stredisko AS VARCHAR),'') NOT IN ('722','10001','882')
+                    ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
+
+                var employees = await connection.QueryAsync(sql, new { tid = id });
+                return Ok(new { success = true, employees = employees });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[GET /api/trainings-v2/{id}/employees-for-record] Error");
+                return StatusCode(500, new { success = false });
+            }
         }
 
         [HttpPost("seed")]

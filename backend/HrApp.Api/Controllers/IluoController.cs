@@ -24,15 +24,17 @@ namespace HrApp.Api.Controllers
             {
                 using var connection = _connectionFactory.CreateHrConnection();
                 string sql = @"
-                    SELECT
+                    SELECT 
                         u.ID as Id,
                         u.BIS_Osobni_cislo as PersonalNumber,
                         u.BIS_Jmeno as FirstName,
                         u.BIS_Prijmeni as LastName,
                         u.Oddeleni as Department,
+                        e.HiringDate as hiringDate,
                         (SELECT COUNT(*) FROM dbo.ILUO_ASSESSMENTS a WHERE a.EmployeePersonalNumber = u.BIS_Osobni_cislo) as SkillCount,
                         (SELECT COUNT(*) FROM dbo.ILUO_ASSESSMENTS a WHERE a.EmployeePersonalNumber = u.BIS_Osobni_cislo AND a.Level = 'O') as ExpertLevelCount
                     FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL) u
+                    LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
                     WHERE u.BIS_Aktivni = 1 AND u.rn = 1
                     ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
 

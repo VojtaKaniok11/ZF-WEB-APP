@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Watermark from "@/components/Watermark";
+import AuthGuard from "@/components/AuthGuard";
+import { AuthProvider } from "@/lib/auth";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -22,10 +24,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="cs">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <Header />
-        <main>{children}</main>
-        <Watermark />
+      <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+        <AuthProvider>
+          <AuthGuard>
+            <Header />
+            <main>{children}</main>
+            <Watermark />
+          </AuthGuard>
+        </AuthProvider>
       </body>
     </html>
   );

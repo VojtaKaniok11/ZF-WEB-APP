@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, Check } from "lucide-react";
+import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, Check, FileText } from "lucide-react";
 import * as xlsx from "xlsx";
 import { TrainingV2 } from "./TrainingsClientV2";
 import AddTrainingRecordModalV2 from "./AddTrainingRecordModalV2";
+import AttendanceSheetModalV2 from "./AttendanceSheetModalV2";
 import { getApiUrl } from "@/lib/constants";
 
 interface EmployeeStatus {
@@ -36,6 +37,7 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
     const [loading, setLoading] = useState(false);
 
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showAttendanceModal, setShowAttendanceModal] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace">("Vše");
@@ -91,9 +93,6 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
 
     // Direct computation — no useMemo — guarantees table re-renders on every filter change
     let filteredEmployees = employees;
-
-    // Filter out employees with "Neproškolen" status (no training record)
-    filteredEmployees = filteredEmployees.filter(emp => (emp.validityStatus || "").trim() !== "Neproškolen");
 
     if (searchQuery) {
         const s = searchQuery.toLowerCase();
@@ -215,6 +214,14 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                             >
                                 <Download size={16} />
                                 Export Excel
+                            </button>
+                            <button
+                                onClick={() => setShowAttendanceModal(true)}
+                                disabled={loading || employees.length === 0}
+                                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            >
+                                <FileText size={16} />
+                                Prezenční listina
                             </button>
                             <button
                                 onClick={() => setShowAddModal(true)}
@@ -373,6 +380,14 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                         setShowAddModal(false);
                         loadDetail();
                     }}
+                />
+            )}
+
+            {showAttendanceModal && (
+                <AttendanceSheetModalV2
+                    training={training}
+                    employees={employees}
+                    onClose={() => setShowAttendanceModal(false)}
                 />
             )}
         </div>

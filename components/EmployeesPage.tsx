@@ -3,15 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import { Employee } from "@/types/employee";
-import { NewEmployeePayload } from "@/types/employee";
 
 import PageHeader from "./PageHeader";
 import ActionButtons from "./ActionButtons";
 import FilterBar from "./FilterBar";
 import EmployeeTable from "./EmployeeTable";
-import AddEmployeeModal from "./AddEmployeeModal";
 import { getApiUrl } from "@/lib/constants";
 
 
@@ -33,10 +32,7 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
     const [workcenter, setWorkcenter] = useState(searchParams.get("wc") ?? "");
     const [workcenterDesc, setWorkcenterDesc] = useState(searchParams.get("wcd") ?? "");
     const [active, setActive] = useState(searchParams.get("active") ?? "");
-
-    // Modals
-    const [showAddModal, setShowAddModal] = useState(false);
-
+    const [isExporting, setIsExporting] = useState(false);
 
     /* ---- Data fetching ---- */
     const fetchEmployees = useCallback(async () => {
@@ -94,22 +90,51 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
         return () => clearTimeout(timer);
     }, [fetchEmployees, syncUrl]);
 
-    /* ---- Save new employee ---- */
-    async function handleSaveEmployee(data: NewEmployeePayload) {
-        const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/employees`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-        });
-        const result = await res.json();
 
-        if (!result.success) {
-            throw new Error(result.message || "Chyba při ukládání.");
+
+    /* ---- Export do Excelu ---- */
+    async function handleExport() {
+        setIsExporting(true);
+        try {
+            const apiUrl = getApiUrl();
+            const res = await fetch(`${apiUrl}/employees/export`);
+            const result = await res.json();
+            if (!result.success || !result.data) return;
+
+            const rows = result.data.map((emp: Record<string, unknown>) => ({
+                "Os. číslo":                   emp.personalNumber ?? "",
+                "Příjmení":                    emp.lastName ?? "",
+                "Jméno":                       emp.firstName ?? "",
+                "Kategorie":                   emp.category ?? "",
+                "Kmen. středisko číslo":       emp.workcenter ?? "",
+                "Kmen. středisko popis":       emp.department ?? "",
+                "Nákladové číslo":             emp.costNumber ?? "",
+                "Nákladové středisko popis":   emp.costNumberDesc ?? "",
+                "Stav":                        emp.isActive ? "Aktivní" : "Neaktivní",
+                "Prací program":               emp.hasWashingProgram ? "Ano" : "Ne",
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws["!cols"] = [
+                { wch: 12 },  // Os. číslo
+                { wch: 20 },  // Příjmení
+                { wch: 18 },  // Jméno
+                { wch: 14 },  // Kategorie
+                { wch: 22 },  // Kmen. středisko číslo
+                { wch: 28 },  // Kmen. středisko popis
+                { wch: 18 },  // Nákladové číslo
+                { wch: 28 },  // Nákladové středisko popis
+                { wch: 12 },  // Stav
+                { wch: 14 },  // Prací program
+            ];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Zaměstnanci");
+            XLSX.writeFile(wb, `zamestnanci_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        } catch (error) {
+            console.error("Export error:", error);
+        } finally {
+            setIsExporting(false);
         }
-
-        setShowAddModal(false);
-        await fetchEmployees();
     }
 
     /* ---- Navigate to detail ---- */
@@ -135,7 +160,8 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
 
                 <ActionButtons
                     count={isLoading ? undefined : employees.length}
-                    onAddClick={() => setShowAddModal(true)}
+                    onExport={handleExport}
+                    isExporting={isExporting}
                 />
 
                 <FilterBar
@@ -169,11 +195,8 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
                     />
                 )}
 
-                <AddEmployeeModal
-                    isOpen={showAddModal}
-                    onClose={() => setShowAddModal(false)}
-                    onSave={handleSaveEmployee}
-                />
+
+
             </div>
         </div>
     );

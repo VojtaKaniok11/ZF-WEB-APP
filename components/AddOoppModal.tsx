@@ -14,18 +14,20 @@ interface OoppItem {
 
 interface AddOoppModalProps {
     employees: Employee[];
+    defaultItemId?: string | null;
+    defaultItemName?: string;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppModalProps) {
+export default function AddOoppModal({ employees, defaultItemId, defaultItemName, onClose, onSuccess }: AddOoppModalProps) {
     const router = useRouter();
 
     // Katalog OOPP pomůcek
     const [ooppItems, setOoppItems] = useState<OoppItem[]>([]);
 
     // Formulář
-    const [ooppItemId, setOoppItemId] = useState("");
+    const [ooppItemId, setOoppItemId] = useState(defaultItemId || "");
     const [issueDate, setIssueDate] = useState("");
     const [nextEntitlementDate, setNextEntitlementDate] = useState("");
     const [quantity, setQuantity] = useState(1);
@@ -146,7 +148,10 @@ export default function AddOoppModal({ employees, onClose, onSuccess }: AddOoppM
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+            <div 
+                className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200" style={{ background: "linear-gradient(135deg, #0054A6 0%, #003d7a 100%)" }}>

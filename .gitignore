@@ -39,3 +39,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# .NET build output
+backend/HrApp.Api/bin/
+backend/HrApp.Api/obj/
+backend/HrApp.Api/publish/
+backend/HrApp.Api/wwwroot/
+backend/HrApp.Api/NewWeb/
+backend/publish/
+
+# Next.js static export copies
+/wwwroot/
+
+# build/publish logs and dumps
+*.log
+build*.txt
+
+# bun (npm is the package manager used in this repo)
+bun.lock

@@ -17,6 +17,110 @@ namespace HrApp.Api.Controllers
             _logger = logger;
         }
 
+        [HttpGet("types/{typeId}")]
+        public async Task<IActionResult> GetMedicalTypeDetail(string typeId)
+        {
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                string tSql = "SELECT ID as id, Name as name, ValidityMonths as validityMonths, Category as category, ISNULL(MedicalFacility, '') AS medicalFacility, ISNULL(Description, '') AS description FROM dbo.MEDICAL_EXAM_TYPES WHERE ID = @tid";
+                var type = await connection.QueryFirstOrDefaultAsync(tSql, new { tid = Uri.UnescapeDataString(typeId) });
+                if (type == null) return NotFound(new { success = false });
+
+                string eSql = @"
+                    SELECT ISNULL(u.BIS_Jmeno, '') AS firstName, ISNULL(u.BIS_Prijmeni, '') AS lastName, ISNULL(u.BIS_Osobni_cislo, '') AS personalNumber, ISNULL(u.Oddeleni, '') AS department, e.HiringDate AS hiringDate,
+                           ISNULL(CAST(u.Nakladove_Stredisko AS VARCHAR), ISNULL(e.CostNumber, '')) AS costNumber,
+                           ISNULL(sp_cc.STREDISKO_POPIS, ISNULL(e.CostNumberDesc, '')) AS costNumberDesc,
+                           CAST(CASE WHEN em.ExamDate IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS hasCompleted, em.ExamDate AS completionDate, em.NextExamDate AS expirationDate,
+                           ISNULL(em.Notes, '') AS notes,
+                           CASE WHEN em.ExamDate IS NULL THEN 'Neproškolen' WHEN em.NextExamDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné' WHEN DATEDIFF(day, CAST(SYSDATETIME() AS DATE), em.NextExamDate) <= 30 THEN 'Blíží se expirace' ELSE 'Platné' END AS validityStatus
+                    FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL AND BIS_Aktivni = 1) u
+                    LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
+                    LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
+                     OUTER APPLY (
+                         SELECT TOP 1 ExamDate, NextExamDate, Notes
+                         FROM dbo.MEDICAL_EXAM_RECORDS r
+                         WHERE r.EmployeePersonalNumber = u.BIS_Osobni_cislo AND r.ExamTypeID = @tid
+                         ORDER BY r.ExamDate DESC
+                     ) em
+                     WHERE u.rn = 1 AND u.BIS_Aktivni = 1
+                     ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
+                var employees = await connection.QueryAsync(eSql, new { tid = Uri.UnescapeDataString(typeId) });
+                return Ok(new { success = true, medicalType = type, employees = employees });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[GET /api/medical/types/{typeId}] Error");
+                return StatusCode(500, new { success = false });
+            }
+        }
+
+        [HttpGet("export")]
+        public async Task<IActionResult> GetExportData([FromQuery] string? category, [FromQuery] string? search)
+        {
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+
+                var conditions = new List<string> { "u.rn = 1" };
+                var parameters = new DynamicParameters();
+
+                if (!string.IsNullOrWhiteSpace(category) && category != "Vše")
+                {
+                    conditions.Add("mt.Category = @category");
+                    parameters.Add("category", category);
+                }
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    conditions.Add("(mt.Name LIKE @search OR mt.Category LIKE @search)");
+                    parameters.Add("search", $"%{search}%");
+                }
+
+                string whereClause = "WHERE " + string.Join(" AND ", conditions);
+
+                string sql = $@"
+                    SELECT
+                        ISNULL(u.BIS_Osobni_cislo, '')                                             AS personalNumber,
+                        ISNULL(u.BIS_Prijmeni, '')                                                 AS lastName,
+                        ISNULL(u.BIS_Jmeno, '')                                                    AS firstName,
+                        ISNULL(CAST(u.Kategorie AS VARCHAR), ISNULL(e.Category, ''))               AS employeeCategory,
+                        ISNULL(CAST(u.Nakladove_Stredisko AS VARCHAR), ISNULL(e.CostNumber, ''))   AS costNumber,
+                        ISNULL(sp_cc.STREDISKO_POPIS, ISNULL(e.CostNumberDesc, ''))                AS costNumberDesc,
+                        mt.Category                                                                AS examCategory,
+                        mt.Name                                                                    AS examName,
+                        em.ExamDate                                                                AS completionDate,
+                        em.NextExamDate                                                            AS expirationDate,
+                        mt.ValidityMonths                                                          AS periodicityMonths,
+                        CASE WHEN em.ExamDate IS NULL THEN 'N'
+                             WHEN em.NextExamDate < CAST(SYSDATETIME() AS DATE) THEN 'N'
+                             ELSE 'A' END                                                          AS isValid
+                    FROM dbo.MEDICAL_EXAM_TYPES mt
+                    CROSS JOIN (
+                        SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn
+                        FROM USER_MANAGEMENT.dbo.USERS
+                        WHERE BIS_Aktivni = 1 AND BIS_Osobni_cislo IS NOT NULL
+                    ) u
+                    LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
+                    LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
+                    OUTER APPLY (
+                        SELECT TOP 1 ExamDate, NextExamDate
+                        FROM dbo.MEDICAL_EXAM_RECORDS r
+                        WHERE r.EmployeePersonalNumber = u.BIS_Osobni_cislo AND r.ExamTypeID = mt.ID
+                        ORDER BY r.ExamDate DESC
+                    ) em
+                    {whereClause}
+                    ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno, mt.Category, mt.Name";
+
+                var result = await connection.QueryAsync(sql, parameters);
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[GET /api/medical/export] Error");
+                return StatusCode(500, new { success = false });
+            }
+        }
+
         [HttpGet("summary")]
         public async Task<IActionResult> GetMedicalSummary()
         {
@@ -183,7 +287,7 @@ namespace HrApp.Api.Controllers
 
         private static string GenId(string prefix)
         {
-            return $"{prefix}-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 5)}";
+            return $"{prefix}-{DateTime.Now:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 5).ToUpper()}";
         }
     }
 

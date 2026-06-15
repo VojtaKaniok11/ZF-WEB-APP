@@ -55,20 +55,11 @@ export function getDepartmentShortCode(department: string | null): string {
 export function getApiUrl(): string {
   if (typeof window === "undefined") return "/api";
   
-  // Hardcoded check for development environment (different ports)
   if (window.location.port === "3000") {
-    return "http://localhost:5062/api";
+    // If we're in Next.js dev mode, point to the backend on the same host but port 5062
+    return `http://${window.location.hostname}:5062/api`;
   }
-  
-  // Try environment variable, but prioritize relative path in production
-  const envUrl = process.env.NEXT_PUBLIC_DOTNET_API_URL;
-  if (envUrl && envUrl.startsWith("http") && window.location.port === "5062") {
-      // If we are already on port 5062 but env says http, 
-      // it's likely a misconfigured .env.local being picked up by build.
-      return "/api";
-  }
-
-  if (envUrl) return envUrl;
   
   return "/api";
 }
+

@@ -30,3 +30,4 @@ export default function OoppPage() {
 
     return <OoppClient employees={employees} />;
 }
+

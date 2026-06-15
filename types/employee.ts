@@ -5,10 +5,14 @@ export interface Employee {
     lastName: string;
     department: string;
     costCenter: string;
+    workcenter: string;
+    workcenterName: string;
+    category: string;
+    costNumber: string;
+    costNumberDesc: string;
     hiringDate: string | null;
     isActive: boolean;
     hasWashingProgram: boolean;
-    workcenterName: string;
 }
 
 export interface PositionHistoryItem {
@@ -31,8 +35,12 @@ export interface EmployeeDetail {
     level: string;
     workcenter: string;
     workcenterName: string;
+    workcenterLabel: string;
     isActive: boolean;
     managerName: string;
+    category?: string;
+    costCenter?: string;
+    costCenterLabel?: string;
     positionHistory: PositionHistoryItem[];
 }
 
@@ -42,6 +50,7 @@ export interface NewEmployeePayload {
     lastName: string;
     department: string;
     costCenter: string | null;
+    category?: string;
     hiringDate: string | null;
     isActive: boolean;
     phone: string;
@@ -52,3 +61,4 @@ export interface NewEmployeePayload {
     workcenter: string;
     bisOsobaId: string;
 }
+

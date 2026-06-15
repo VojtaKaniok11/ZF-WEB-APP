@@ -17,6 +17,41 @@ namespace HrApp.Api.Controllers
             _logger = logger;
         }
 
+        [HttpGet("items/{itemId}")]
+        public async Task<IActionResult> GetOoppItemDetail(string itemId)
+        {
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                string tSql = "SELECT ID as id, Name as name, Category as category FROM dbo.OOPP_ITEMS WHERE ID = @tid";
+                var item = await connection.QueryFirstOrDefaultAsync(tSql, new { tid = Uri.UnescapeDataString(itemId) });
+                if (item == null) return NotFound(new { success = false });
+
+                string eSql = @"
+                    SELECT ISNULL(u.BIS_Jmeno, '') AS firstName, ISNULL(u.BIS_Prijmeni, '') AS lastName, ISNULL(u.BIS_Osobni_cislo, '') AS personalNumber, ISNULL(u.Oddeleni, '') AS department, e.HiringDate AS hiringDate,
+                           CAST(CASE WHEN em.IssueDate IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS hasCompleted, em.IssueDate AS completionDate, em.NextEntitlementDate AS expirationDate,
+                           em.Size as size, em.Quantity as quantity,
+                           CASE WHEN em.IssueDate IS NULL THEN 'Nevydáno' WHEN em.NextEntitlementDate < CAST(SYSDATETIME() AS DATE) THEN 'Nárok' WHEN DATEDIFF(day, CAST(SYSDATETIME() AS DATE), em.NextEntitlementDate) <= 30 THEN 'Brzy nárok' ELSE 'Vydáno' END AS validityStatus
+                    FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn FROM USER_MANAGEMENT.dbo.USERS WHERE BIS_Osobni_cislo IS NOT NULL AND BIS_Aktivni = 1) u
+                    LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
+                     OUTER APPLY (
+                         SELECT TOP 1 IssueDate, NextEntitlementDate, Size, Quantity
+                         FROM dbo.OOPP_ISSUES r
+                         WHERE r.EmployeePersonalNumber = u.BIS_Osobni_cislo AND r.OoppItemID = @tid
+                         ORDER BY r.IssueDate DESC
+                     ) em
+                     WHERE u.rn = 1 AND u.BIS_Aktivni = 1
+                     ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno";
+                var employees = await connection.QueryAsync(eSql, new { tid = Uri.UnescapeDataString(itemId) });
+                return Ok(new { success = true, item = item, employees = employees });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[GET /api/oopp/items/{itemId}] Error");
+                return StatusCode(500, new { success = false });
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetOoppItems()
         {
@@ -30,6 +65,25 @@ namespace HrApp.Api.Controllers
             {
                 _logger.LogError(ex, "[GET /api/oopp] Error");
                 return StatusCode(500, new { success = false, message = "Chyba při načítání OOPP." });
+            }
+        }
+
+        [HttpPost("items")]
+        public async Task<IActionResult> CreateOoppItem([FromBody] NewOoppItemPayload body)
+        {
+            if (string.IsNullOrWhiteSpace(body.Name) || string.IsNullOrWhiteSpace(body.Category)) return BadRequest(new { success = false, message = "Neplatné údaje." });
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                string newId = $"OP_{Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()}";
+                string sql = "INSERT INTO dbo.OOPP_ITEMS (ID, Name, Category) VALUES (@id, @name, @cat)";
+                await connection.ExecuteAsync(sql, new { id = newId, name = body.Name.Trim(), cat = body.Category.Trim() });
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[POST /api/oopp/items] Error");
+                return StatusCode(500, new { success = false, message = "Chyba při ukládání položky OOPP." });
             }
         }
 
@@ -149,5 +203,11 @@ namespace HrApp.Api.Controllers
         public string? Size { get; set; }
         public string? Notes { get; set; }
         public List<string>? AttendeePersonalNumbers { get; set; }
+    }
+
+    public class NewOoppItemPayload
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
     }
 }
