@@ -2,8 +2,8 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { useState, useEffect, use } from "react";
+import { ArrowLeft, Loader2, Power } from "lucide-react";
+import { useState, useEffect, useCallback, use } from "react";
 import ExpirationBadge from "@/components/ExpirationBadge";
 import type { EmployeeDetail } from "@/types/employee";
 import type { EmployeeTrainingRecord } from "@/types/training";
@@ -18,39 +18,58 @@ export default function TrainingDetailPage({ params }: { params: Promise<{ perso
     const [records, setRecords] = useState<EmployeeTrainingRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
+    const [togglingId, setTogglingId] = useState<string | null>(null);
+
+    const load = useCallback(async () => {
+        if (!personalNumber) return;
+        const pn = encodeURIComponent(personalNumber);
+        setIsLoading(true);
+        try {
+            const apiUrl = getApiUrl();
+            const [empRes, trnRes] = await Promise.all([
+                fetch(`${apiUrl}/employees/${pn}`),
+                fetch(`${apiUrl}/trainings/${pn}`),
+            ]);
+            const empJson = await empRes.json();
+            if (!empJson.success) { setNotFound(true); return; }
+            setEmployee(empJson.data);
+
+            const trnJson = await trnRes.json();
+            if (trnJson.success) setRecords(trnJson.data);
+        } catch {
+            setNotFound(true);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [personalNumber]);
 
     useEffect(() => {
         if (!personalNumber) return;
-        const pn = encodeURIComponent(personalNumber);
-
-        async function load() {
-            setIsLoading(true);
-            try {
-                const apiUrl = getApiUrl();
-                const [empRes, trnRes] = await Promise.all([
-                    fetch(`${apiUrl}/employees/${pn}`),
-                    fetch(`${apiUrl}/trainings/${pn}`),
-                ]);
-                const empJson = await empRes.json();
-                if (!empJson.success) { setNotFound(true); return; }
-                setEmployee(empJson.data);
-
-                const trnJson = await trnRes.json();
-                if (trnJson.success) setRecords(trnJson.data);
-            } catch {
-                setNotFound(true);
-            } finally {
-                setIsLoading(false);
-            }
-        }
-
         load();
 
         // Po přidání školení z modalu znovu načteme záznamy
         function handleTrainingAdded() { load(); }
         window.addEventListener("training-added", handleTrainingAdded);
         return () => window.removeEventListener("training-added", handleTrainingAdded);
-    }, [personalNumber]);
+    }, [personalNumber, load]);
+
+    async function handleToggleActive(trainingId: string, isActive: boolean) {
+        if (!personalNumber) return;
+        setTogglingId(trainingId);
+        try {
+            const res = await fetch(`${getApiUrl()}/trainings-v2/records/set-active`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ trainingId: Number(trainingId), personalNumbers: [personalNumber], isActive }),
+            });
+            const data = await res.json();
+            if (data.success) await load();
+        } catch (err) {
+            console.error("Toggle active error:", err);
+        } finally {
+            setTogglingId(null);
+        }
+    }
 
     function formatDate(d: string | null): string {
         if (!d) return "—";
@@ -125,6 +144,7 @@ export default function TrainingDetailPage({ params }: { params: Promise<{ perso
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Expirace</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Školitel</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
+                                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Akce</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -139,6 +159,27 @@ export default function TrainingDetailPage({ params }: { params: Promise<{ perso
                                         <td className="px-5 py-3 text-gray-600">{r.trainerName}</td>
                                         <td className="px-5 py-3">
                                             <ExpirationBadge status={r.status} />
+                                        </td>
+                                        <td className="px-5 py-3 text-right">
+                                            {r.status === "inactive" ? (
+                                                <button
+                                                    onClick={() => handleToggleActive(r.trainingId, true)}
+                                                    disabled={togglingId === r.trainingId}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                                >
+                                                    {togglingId === r.trainingId ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
+                                                    Aktivovat
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleToggleActive(r.trainingId, false)}
+                                                    disabled={togglingId === r.trainingId}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                                                >
+                                                    {togglingId === r.trainingId ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
+                                                    Deaktivovat (0)
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

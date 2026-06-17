@@ -60,6 +60,6 @@ export interface EmployeeTrainingRecord {
     expirationDate: string | null;
     /** Jméno školitele */
     trainerName: string;
-    /** Stav platnosti */
-    status: "valid" | "expiring_soon" | "expired";
+    /** Stav platnosti ("inactive" = absolvované, ale v DB deaktivované – zobrazí se jako "0") */
+    status: "valid" | "expiring_soon" | "expired" | "inactive";
 }

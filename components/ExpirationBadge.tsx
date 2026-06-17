@@ -1,8 +1,11 @@
+type BadgeStatus = "valid" | "expiring_soon" | "expired" | "issued" | "eligible_soon" | "eligible" | "inactive";
+
 interface ExpirationBadgeProps {
-    status: "valid" | "expiring_soon" | "expired" | "issued" | "eligible_soon" | "eligible";
+    // "superseded" = záznam nahrazený novější variantou téže prohlídky (jiná perioda) → zobrazí se jen "—"
+    status: BadgeStatus | "superseded";
 }
 
-const CONFIG: Record<ExpirationBadgeProps["status"], { label: string; classes: string }> = {
+const CONFIG: Record<BadgeStatus, { label: string; classes: string }> = {
     valid: {
         label: "Platné",
         classes: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
@@ -27,9 +30,19 @@ const CONFIG: Record<ExpirationBadgeProps["status"], { label: string; classes: s
         label: "Má nárok",
         classes: "bg-blue-50 text-blue-700 ring-blue-600/20",
     },
+    // Školení absolvované, ale v databázi deaktivované (Akt_skol = 0) – není propadlé, jen neaktivní
+    inactive: {
+        label: "0",
+        classes: "bg-gray-100 text-gray-600 ring-gray-500/20",
+    },
 };
 
 export default function ExpirationBadge({ status }: ExpirationBadgeProps) {
+    // Nahrazená (starší) perioda téže prohlídky – jen pomlčka, žádný stav.
+    if (status === "superseded") {
+        return <span className="text-gray-300" title="Nahrazeno novější prohlídkou">—</span>;
+    }
+
     const { label, classes } = CONFIG[status];
     return (
         <span

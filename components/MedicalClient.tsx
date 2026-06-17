@@ -102,8 +102,14 @@ export default function MedicalClient({ employees }: Props) {
             const fmt = (d: string | null | undefined) =>
                 d ? new Date(d).toLocaleDateString('cs-CZ') : '';
 
+            // Osobní číslo jako číslo (ne text), pokud je to celé číslo.
+            const pnValue = (pn: unknown) => {
+                const s = String(pn ?? '');
+                return /^\d+$/.test(s) ? Number(s) : s;
+            };
+
             const data = result.data.map((row: Record<string, unknown>) => ({
-                'Osobní číslo': row.personalNumber ?? '',
+                'Osobní číslo': pnValue(row.personalNumber),
                 'Příjmení': row.lastName ?? '',
                 'Jméno': row.firstName ?? '',
                 'Kategorie zaměstnance': row.employeeCategory ?? '',
@@ -114,7 +120,7 @@ export default function MedicalClient({ employees }: Props) {
                 'Datum absolvování': fmt(row.completionDate as string | null),
                 'Datum platnosti': fmt(row.expirationDate as string | null),
                 'Perioda (měsíce)': row.periodicityMonths ?? '',
-                'Platné': row.isValid ?? 'N',
+                'Stav': row.status ?? '',
             }));
 
             const ws = xlsx.utils.json_to_sheet(data);
@@ -282,6 +288,7 @@ export default function MedicalClient({ employees }: Props) {
                 typeId={selectedTypeId}
                 employees={employees}
                 onClose={() => setSelectedTypeId(null)}
+                onChanged={loadTypes}
             />
 
             {showCreateModal && (

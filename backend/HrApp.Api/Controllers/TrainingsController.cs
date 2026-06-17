@@ -10,6 +10,10 @@ namespace HrApp.Api.Controllers
     {
         private readonly ISqlConnectionFactory _connectionFactory;
         private readonly ILogger<TrainingsController> _logger;
+        // Legacy příznak "aktivní školení" (původní Akt_skol) je importovaný v TRAINING_RECORDS.LegacyIsActive.
+        // Když = 0 → školení je deaktivované → stav "inactive" ("0"), ne "propadlé".
+        private static bool _aktChecked = false;
+        private static bool _hasLegacyActive = false;
 
         public TrainingsController(ISqlConnectionFactory connectionFactory, ILogger<TrainingsController> logger)
         {
@@ -25,24 +29,55 @@ namespace HrApp.Api.Controllers
                 using var connection = _connectionFactory.CreateHrConnection();
                 var param = new { pn = Uri.UnescapeDataString(personalNumber) };
 
-                string sql = @"
+                // Jednorázově zjistíme, jestli je k dispozici sloupec LegacyIsActive. Když ne, vše běží jako dosud.
+                if (!_aktChecked)
+                {
+                    try
+                    {
+                        _hasLegacyActive = await connection.QueryFirstAsync<int>(
+                            "SELECT CASE WHEN COL_LENGTH('dbo.TRAINING_RECORDS','LegacyIsActive') IS NOT NULL THEN 1 ELSE 0 END") == 1;
+                    }
+                    catch { _hasLegacyActive = false; }
+                    _aktChecked = true;
+                }
+
+                string aktInner = _hasLegacyActive ? "r.LegacyIsActive AS aktSkol," : "";
+                string aktOuter = _hasLegacyActive ? "aktSkol," : "";
+
+                // Pro každou kombinaci skupina (kategorie) + typ školení vrátíme pouze
+                // nejnovější záznam (podle data absolvování). Starší duplicitní záznamy
+                // téhož školení se nezobrazují – stejně jako v původním systému.
+                string sql = $@"
+                    WITH ranked AS (
+                        SELECT
+                            r.ID                                            AS sessionId,
+                            t.ID                                            AS trainingId,
+                            t.Name                                          AS trainingName,
+                            c.Name                                          AS category,
+                            t.PeriodicityMonths                             AS periodicityMonths,
+                            CONVERT(varchar(10), r.CompletionDate, 23)      AS completedDate,
+                            CONVERT(varchar(10), r.ExpirationDate, 23)      AS expirationDate,
+                            'Autorizovaný lektor ZF'                        AS trainerName,
+                            ''                                              AS statusOverride,
+                            ''                                              AS notes,
+                            {aktInner}
+                            ROW_NUMBER() OVER (
+                                PARTITION BY t.CategoryID, t.Name
+                                ORDER BY r.CompletionDate DESC, r.ID DESC
+                            )                                               AS rn
+                        FROM dbo.TRAINING_RECORDS r
+                        JOIN dbo.TRAININGS_CATALOG t ON t.ID = r.TrainingID
+                        JOIN dbo.TRAINING_CATEGORIES c ON c.ID = t.CategoryID
+                        JOIN dbo.EMPLOYEES e ON e.ID = r.EmployeeID
+                        WHERE e.PersonalNumber = @pn
+                    )
                     SELECT
-                        r.ID                                            AS sessionId,
-                        t.ID                                            AS trainingId,
-                        t.Name                                          AS trainingName,
-                        c.Name                                          AS category,
-                        t.PeriodicityMonths                             AS periodicityMonths,
-                        CONVERT(varchar(10), r.CompletionDate, 23)      AS completedDate,
-                        CONVERT(varchar(10), r.ExpirationDate, 23)      AS expirationDate,
-                        'Autorizovaný lektor ZF'                        AS trainerName,
-                        ''                                              AS statusOverride,
-                        ''                                              AS notes
-                    FROM dbo.TRAINING_RECORDS r
-                    JOIN dbo.TRAININGS_CATALOG t ON t.ID = r.TrainingID
-                    JOIN dbo.TRAINING_CATEGORIES c ON c.ID = t.CategoryID
-                    JOIN dbo.EMPLOYEES e ON e.ID = r.EmployeeID
-                    WHERE e.PersonalNumber = @pn
-                    ORDER BY r.CompletionDate DESC, r.ID ASC";
+                        sessionId, trainingId, trainingName, category, periodicityMonths,
+                        completedDate, expirationDate, trainerName, statusOverride, notes, {aktOuter}
+                        rn
+                    FROM ranked
+                    WHERE rn = 1
+                    ORDER BY completedDate DESC, sessionId ASC";
 
                 var records = await connection.QueryAsync(sql, param);
 
@@ -61,6 +96,14 @@ namespace HrApp.Api.Controllers
                     if (!string.IsNullOrEmpty(row.statusOverride) && row.statusOverride.ToLower() != "absolvoval")
                     {
                         status = "expired";
+                    }
+
+                    // Deaktivované školení (LegacyIsActive = 0) – absolvované, ale neaktivní → "0" místo "propadlé".
+                    if (_hasLegacyActive)
+                    {
+                        var akt = row.aktSkol;
+                        // null = příznak neuveden → neměníme stav.
+                        if (akt != null && !Convert.ToBoolean(akt)) status = "inactive";
                     }
 
                     return new

@@ -301,6 +301,7 @@ export default function TrainingsClientV2() {
             <TrainingDetailModalV2
                 trainingId={selectedTrainingId}
                 onClose={() => setSelectedTrainingId(null)}
+                onUpdated={loadTrainings}
             />
 
             {showCreateModal && (

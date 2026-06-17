@@ -2,13 +2,15 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { useState, useEffect, use } from "react";
+import { ArrowLeft, Loader2, Power } from "lucide-react";
+import { useState, useEffect, useCallback, use } from "react";
 import ExpirationBadge from "@/components/ExpirationBadge";
 import type { EmployeeDetail } from "@/types/employee";
 import { getApiUrl } from "@/lib/constants";
+import { medicalResultClass } from "@/lib/medical";
 
 interface MedicalRecord {
+    examTypeId: string;
     examTypeName: string;
     category: string;
     examDate: string;
@@ -16,7 +18,7 @@ interface MedicalRecord {
     result: string;
     notes: string;
     doctorName: string;
-    status: "valid" | "expiring_soon" | "expired";
+    status: "valid" | "expiring_soon" | "expired" | "superseded" | "inactive";
 }
 
 
@@ -28,34 +30,53 @@ export default function MedicalDetailPage({ params }: { params: Promise<{ person
     const [records, setRecords] = useState<MedicalRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
+    const [togglingId, setTogglingId] = useState<string | null>(null);
+
+    const load = useCallback(async () => {
+        if (!personalNumber) return;
+        const pn = encodeURIComponent(personalNumber);
+        setIsLoading(true);
+        try {
+            const apiUrl = getApiUrl();
+            const [empRes, medRes] = await Promise.all([
+                fetch(`${apiUrl}/employees/${pn}`),
+                fetch(`${apiUrl}/medical/${pn}`),
+            ]);
+            const empJson = await empRes.json();
+            if (!empJson.success) { setNotFound(true); return; }
+            setEmployee(empJson.data);
+
+            const medJson = await medRes.json();
+            if (medJson.success) setRecords(medJson.data);
+        } catch {
+            setNotFound(true);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [personalNumber]);
 
     useEffect(() => {
         if (!personalNumber) return;
-        const pn = encodeURIComponent(personalNumber);
-
-        async function load() {
-            setIsLoading(true);
-            try {
-                const apiUrl = getApiUrl();
-                const [empRes, medRes] = await Promise.all([
-                    fetch(`${apiUrl}/employees/${pn}`),
-                    fetch(`${apiUrl}/medical/${pn}`),
-                ]);
-                const empJson = await empRes.json();
-                if (!empJson.success) { setNotFound(true); return; }
-                setEmployee(empJson.data);
-
-                const medJson = await medRes.json();
-                if (medJson.success) setRecords(medJson.data);
-            } catch {
-                setNotFound(true);
-            } finally {
-                setIsLoading(false);
-            }
-        }
-
         load();
-    }, [personalNumber]);
+    }, [personalNumber, load]);
+
+    async function handleToggleActive(examTypeId: string, isActive: boolean) {
+        if (!personalNumber) return;
+        setTogglingId(examTypeId);
+        try {
+            const res = await fetch(`${getApiUrl()}/medical/records/set-active`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ examTypeId, personalNumbers: [personalNumber], isActive }),
+            });
+            const data = await res.json();
+            if (data.success) await load();
+        } catch (err) {
+            console.error("Toggle active error:", err);
+        } finally {
+            setTogglingId(null);
+        }
+    }
 
     function formatDate(d: string | null): string {
         if (!d) return "—";
@@ -111,6 +132,7 @@ export default function MedicalDetailPage({ params }: { params: Promise<{ person
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Další prohlídka</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Výsledek</th>
                                     <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Stav</th>
+                                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Akce</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -123,14 +145,35 @@ export default function MedicalDetailPage({ params }: { params: Promise<{ person
                                         <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.examDate)}</td>
                                         <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.nextExamDate)}</td>
                                         <td className="px-5 py-3">
-                                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${r.result === "Způsobilý" ? "bg-emerald-50 text-emerald-700" :
-                                                r.result === "Způsobilý s omezením" ? "bg-amber-50 text-amber-700" :
-                                                    "bg-red-50 text-red-700"}`}>
+                                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${medicalResultClass(r.result)}`}>
                                                 {r.result}
                                             </span>
                                         </td>
                                         <td className="px-5 py-3">
                                             <ExpirationBadge status={r.status} />
+                                        </td>
+                                        <td className="px-5 py-3 text-right">
+                                            {r.status === "superseded" ? (
+                                                <span className="text-gray-300">—</span>
+                                            ) : r.status === "inactive" ? (
+                                                <button
+                                                    onClick={() => handleToggleActive(r.examTypeId, true)}
+                                                    disabled={togglingId === r.examTypeId}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                                >
+                                                    {togglingId === r.examTypeId ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
+                                                    Aktivovat
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleToggleActive(r.examTypeId, false)}
+                                                    disabled={togglingId === r.examTypeId}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                                                >
+                                                    {togglingId === r.examTypeId ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
+                                                    Deaktivovat (0)
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

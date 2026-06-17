@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, ChevronDown } from "lucide-react";
+import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, ChevronDown, Trash2 } from "lucide-react";
 import * as xlsx from "xlsx";
 import AddMedicalModal from "./AddMedicalModal";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import { getApiUrl } from "@/lib/constants";
 import { MedicalTypeV2 } from "./MedicalClient";
 import { Employee } from "@/types/employee";
@@ -19,7 +20,7 @@ interface EmployeeStatus {
     completionDate: string | null;
     expirationDate: string | null;
     notes: string;
-    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace' | 'Neproškolen';
+    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace' | 'Neproškolen' | 'superseded' | '0';
     hiringDate: string | null;
 }
 
@@ -27,18 +28,24 @@ interface Props {
     typeId: string | null;
     employees: Employee[];
     onClose: () => void;
+    onChanged?: () => void;
 }
 
-export default function MedicalDetailModal({ typeId, employees: allEmployees, onClose }: Props) {
+export default function MedicalDetailModal({ typeId, employees: allEmployees, onClose, onChanged }: Props) {
     const [medicalType, setMedicalType] = useState<MedicalTypeV2 | null>(null);
     const [employees, setEmployees] = useState<EmployeeStatus[]>([]);
     const [loading, setLoading] = useState(false);
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [expandedNote, setExpandedNote] = useState<string | null>(null);
+    const [confirmDeleteType, setConfirmDeleteType] = useState(false);
+    const [recordToDelete, setRecordToDelete] = useState<EmployeeStatus | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
-    const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace">("Vše");
+    const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace" | "0">("Vše");
+    const [selectedPns, setSelectedPns] = useState<Set<string>>(new Set());
+    const [togglingActive, setTogglingActive] = useState(false);
     const [selectedCostNumbers, setSelectedCostNumbers] = useState<string[]>([]);
     const [isCostFilterOpen, setIsCostFilterOpen] = useState(false);
     const costFilterRef = useRef<HTMLDivElement>(null);
@@ -63,6 +70,7 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
     };
 
     useEffect(() => {
+        setSelectedPns(new Set());
         if (typeId) {
             loadDetail();
         } else {
@@ -70,6 +78,71 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
             setEmployees([]);
         }
     }, [typeId]);
+
+    const togglePn = (pn: string) => {
+        setSelectedPns(prev => {
+            const next = new Set(prev);
+            if (next.has(pn)) next.delete(pn); else next.add(pn);
+            return next;
+        });
+    };
+
+    const handleSetActive = async (isActive: boolean) => {
+        const pns = Array.from(selectedPns).filter(Boolean);
+        if (pns.length === 0 || !typeId) return;
+        setTogglingActive(true);
+        try {
+            const res = await fetch(`${getApiUrl()}/medical/records/set-active`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ examTypeId: typeId, personalNumbers: pns, isActive }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSelectedPns(new Set());
+                loadDetail();
+            }
+        } catch (err) {
+            console.error("Set active error:", err);
+        } finally {
+            setTogglingActive(false);
+        }
+    };
+
+    const handleDeleteType = async () => {
+        if (!typeId) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`${getApiUrl()}/medical/types/${encodeURIComponent(typeId)}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setConfirmDeleteType(false);
+                onChanged?.();
+                onClose();
+            }
+        } catch (err) {
+            console.error("Delete type error:", err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const handleDeleteRecord = async () => {
+        if (!typeId || !recordToDelete) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`${getApiUrl()}/medical/types/${encodeURIComponent(typeId)}/records/${encodeURIComponent(recordToDelete.personalNumber)}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setRecordToDelete(null);
+                loadDetail();
+            }
+        } catch (err) {
+            console.error("Delete record error:", err);
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     const uniqueCostNumbers = useMemo(() => {
         const seen = new Set<string>();
@@ -119,15 +192,18 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
     const handleExportExcel = () => {
         if (filteredEmployees.length === 0) return;
 
+        // Osobní číslo zapíšeme jako číslo (ne text), pokud je to celé číslo.
+        const pnValue = (pn: string) => (pn && /^\d+$/.test(pn) ? Number(pn) : pn || '');
+
         const data = filteredEmployees.map(emp => ({
             'Příjmení a jméno': `${emp.lastName} ${emp.firstName}`,
-            'Osobní číslo': emp.personalNumber || '',
+            'Osobní číslo': pnValue(emp.personalNumber),
             'Nákladové středisko – číslo': emp.costNumber || '',
             'Nákladové středisko – popis': emp.costNumberDesc || '',
             'Datum absolvování': emp.completionDate ? new Date(emp.completionDate).toLocaleDateString('cs-CZ') : '',
             'Datum platnosti': emp.expirationDate ? new Date(emp.expirationDate).toLocaleDateString('cs-CZ') : '',
             'Lékařské zařízení': medicalType?.medicalFacility || '',
-            'Stav': emp.validityStatus
+            'Stav': emp.validityStatus === 'superseded' ? '—' : emp.validityStatus
         }));
 
         const ws = xlsx.utils.json_to_sheet(data);
@@ -182,12 +258,22 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                         )}
                     </div>
 
-                    <button
-                        onClick={onClose}
-                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setConfirmDeleteType(true)}
+                            disabled={loading || !medicalType}
+                            className="inline-flex items-center gap-2 rounded-lg bg-red-500/90 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Trash2 size={15} />
+                            Smazat
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Toolbar */}
@@ -246,6 +332,7 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                                     <option value="Platné">Platné</option>
                                     <option value="Neplatné">Propadlé</option>
                                     <option value="Blíží se expirace">Blíží se expirace</option>
+                                    <option value="0">Neaktivní (0)</option>
                                 </select>
                             </div>
 
@@ -314,6 +401,39 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                             </div>
                         </div>
                     )}
+
+                    {/* Hromadná akce: aktivace / deaktivace vybraných */}
+                    {!loading && selectedPns.size > 0 && (
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+                            <span className="text-sm font-medium text-blue-800">
+                                Vybráno {selectedPns.size} {selectedPns.size === 1 ? "zaměstnanec" : selectedPns.size <= 4 ? "zaměstnanci" : "zaměstnanců"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => handleSetActive(true)}
+                                    disabled={togglingActive}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
+                                >
+                                    <CheckCircle size={15} />
+                                    Nastavit aktivní
+                                </button>
+                                <button
+                                    onClick={() => handleSetActive(false)}
+                                    disabled={togglingActive}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 active:scale-95 disabled:opacity-50"
+                                >
+                                    Deaktivovat (0)
+                                </button>
+                                <button
+                                    onClick={() => setSelectedPns(new Set())}
+                                    disabled={togglingActive}
+                                    className="rounded-lg px-2.5 py-2 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 disabled:opacity-50"
+                                >
+                                    Zrušit výběr
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Data Table */}
@@ -329,6 +449,23 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                             <table className="w-full text-left border-collapse min-w-[900px]">
                                 <thead>
                                     <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        <th className="px-4 py-4 w-10">
+                                            <input
+                                                type="checkbox"
+                                                className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                checked={filteredEmployees.length > 0 && filteredEmployees.every(e => selectedPns.has(e.personalNumber))}
+                                                ref={el => { if (el) el.indeterminate = filteredEmployees.some(e => selectedPns.has(e.personalNumber)) && !filteredEmployees.every(e => selectedPns.has(e.personalNumber)); }}
+                                                onChange={(e) => {
+                                                    const pns = filteredEmployees.map(emp => emp.personalNumber).filter(Boolean);
+                                                    setSelectedPns(prev => {
+                                                        const next = new Set(prev);
+                                                        if (e.target.checked) pns.forEach(pn => next.add(pn));
+                                                        else pns.forEach(pn => next.delete(pn));
+                                                        return next;
+                                                    });
+                                                }}
+                                            />
+                                        </th>
                                         <th className="px-4 py-4">Zaměstnanec</th>
                                         <th className="px-4 py-4">Nákladové středisko</th>
                                         <th className="px-4 py-4">Nákl. středisko popis</th>
@@ -336,11 +473,21 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                                         <th className="px-4 py-4">Platnost do</th>
                                         <th className="px-4 py-4">Poznámka</th>
                                         <th className="px-4 py-4 text-right">Status</th>
+                                        <th className="px-4 py-4 text-right">Akce</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredEmployees.map((emp) => (
-                                        <tr key={emp.personalNumber} className="transition-colors hover:bg-blue-50/40">
+                                        <tr key={emp.personalNumber} className={`transition-colors hover:bg-blue-50/40 ${selectedPns.has(emp.personalNumber) ? "bg-blue-50/60" : ""}`}>
+                                            <td className="px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    checked={selectedPns.has(emp.personalNumber)}
+                                                    disabled={!emp.personalNumber}
+                                                    onChange={() => togglePn(emp.personalNumber)}
+                                                />
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-blue-200 text-xs font-bold text-blue-700">
@@ -390,11 +537,20 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                                             <td className="px-4 py-3 text-right">
                                                 <StatusBadge status={emp.validityStatus} />
                                             </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button
+                                                    onClick={() => setRecordToDelete(emp)}
+                                                    title="Smazat záznam zaměstnance"
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                     {filteredEmployees.length === 0 && (
                                         <tr>
-                                            <td colSpan={7} className="py-12 text-center text-sm text-gray-400">
+                                            <td colSpan={9} className="py-12 text-center text-sm text-gray-400">
                                                 Nenalezeny žádné záznamy pro dané filtry.
                                             </td>
                                         </tr>
@@ -434,6 +590,38 @@ export default function MedicalDetailModal({ typeId, employees: allEmployees, on
                     }}
                 />
             )}
+
+            {confirmDeleteType && (
+                <ConfirmDeleteModal
+                    title="Smazat celou prohlídku?"
+                    message={
+                        <>
+                            Opravdu chcete smazat prohlídku <strong>{medicalType?.name}</strong> z katalogu?
+                            Smažou se i všechny záznamy zaměstnanců s touto prohlídkou.
+                        </>
+                    }
+                    confirmLabel="Smazat prohlídku"
+                    loading={deleting}
+                    onConfirm={handleDeleteType}
+                    onCancel={() => setConfirmDeleteType(false)}
+                />
+            )}
+
+            {recordToDelete && (
+                <ConfirmDeleteModal
+                    title="Smazat záznam zaměstnance?"
+                    message={
+                        <>
+                            Opravdu smazat záznam o této prohlídce u <strong>{recordToDelete.firstName} {recordToDelete.lastName}</strong>
+                            {recordToDelete.personalNumber ? ` (${recordToDelete.personalNumber})` : ""}?
+                        </>
+                    }
+                    confirmLabel="Smazat záznam"
+                    loading={deleting}
+                    onConfirm={handleDeleteRecord}
+                    onCancel={() => setRecordToDelete(null)}
+                />
+            )}
         </div>
     );
 }
@@ -457,6 +645,18 @@ function StatusBadge({ status }: { status: string }) {
         return (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
                 <Clock size={14} /> Expiruje
+            </span>
+        );
+    }
+    // Starší perioda téže prohlídky, nahrazená novějším záznamem jiné periody → jen pomlčka.
+    if (status === 'superseded') {
+        return <span className="text-gray-300" title="Nahrazeno novější prohlídkou (jiná perioda)">—</span>;
+    }
+    // Deaktivovaná prohlídka (LegacyIsActive = 0) – absolvovaná, ale neaktivní → "0".
+    if (status === '0') {
+        return (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/20">
+                0
             </span>
         );
     }

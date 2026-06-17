@@ -54,6 +54,7 @@ export interface EmployeeMedicalRecord {
     nextExamDate: string | null;
     doctorName: string;
     result: MedicalExamRecord["result"];
-    status: "valid" | "expiring_soon" | "expired";
+    /** "superseded" = starší perioda téže prohlídky, nahrazená novějším záznamem → zobrazí se "—"; "inactive" = deaktivovaná → "0" */
+    status: "valid" | "expiring_soon" | "expired" | "superseded" | "inactive";
     notes: string;
 }

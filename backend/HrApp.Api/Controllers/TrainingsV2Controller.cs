@@ -13,6 +13,9 @@ namespace HrApp.Api.Controllers
         private readonly ILogger<TrainingsV2Controller> _logger;
         private static bool _catalogSchemaChecked = false;
         private static bool _hasUmCostDescCol = false;
+        // Legacy příznak "aktivní školení" (původní Akt_skol z prezenček) je importovaný
+        // přímo v TRAINING_RECORDS.LegacyIsActive. Když = 0 → školení je deaktivované → stav "0", ne "propadlé".
+        private static bool _hasLegacyActive = false;
 
         public TrainingsV2Controller(ISqlConnectionFactory connectionFactory, ILogger<TrainingsV2Controller> logger)
         {
@@ -34,6 +37,8 @@ namespace HrApp.Api.Controllers
                     ALTER TABLE HR.dbo.EMPLOYEES ADD CostNumberDesc NVARCHAR(100) NULL;
                 IF COL_LENGTH('dbo.TRAINING_RECORDS', 'IsLegalOrExternal') IS NULL
                     ALTER TABLE dbo.TRAINING_RECORDS ADD IsLegalOrExternal BIT NOT NULL DEFAULT 0;
+                IF COL_LENGTH('dbo.TRAINING_RECORDS', 'LegacyIsActive') IS NULL
+                    ALTER TABLE dbo.TRAINING_RECORDS ADD LegacyIsActive BIT NULL;
             ";
             try
             {
@@ -50,6 +55,12 @@ namespace HrApp.Api.Controllers
                 _hasUmCostDescCol = cnt > 0;
             }
             catch { }
+            try
+            {
+                _hasLegacyActive = await connection.QueryFirstAsync<int>(
+                    "SELECT CASE WHEN COL_LENGTH('dbo.TRAINING_RECORDS','LegacyIsActive') IS NOT NULL THEN 1 ELSE 0 END") == 1;
+            }
+            catch { _hasLegacyActive = false; }
             _catalogSchemaChecked = true;
         }
 
@@ -111,6 +122,10 @@ namespace HrApp.Api.Controllers
                     : "ISNULL(e.CostNumberDesc, '')";
                 string detailCostDescExpr = $"ISNULL(sp_cc.STREDISKO_POPIS, {detailCostDescFallback})";
 
+                // Deaktivované školení (LegacyIsActive = 0) → stav "0" místo "Neplatné/Propadlé". Jen pokud sloupec existuje.
+                string aktSelect = _hasLegacyActive ? ", tr.LegacyIsActive" : "";
+                string aktCase = _hasLegacyActive ? "WHEN tr.LegacyIsActive = 0 THEN '0'\n                             " : "";
+
                 string eSql = $@"
                     SELECT e.ID AS employeeId, ISNULL(u.BIS_Jmeno, '') AS firstName, ISNULL(u.BIS_Prijmeni, '') AS lastName,
                         ISNULL(u.BIS_Osobni_cislo, '') AS personalNumber, ISNULL(u.Oddeleni, '') AS department,
@@ -121,7 +136,7 @@ namespace HrApp.Api.Controllers
                         CAST(ISNULL(tr.HasCompleted, 0) AS BIT) AS hasCompleted, tr.CompletionDate AS completionDate,
                         tr.ExpirationDate AS expirationDate, CAST(ISNULL(tr.IsLegalOrExternal, 0) AS BIT) AS isLegalOrExternal,
                         CASE WHEN tr.HasCompleted IS NULL THEN 'Neproškolen'
-                             WHEN tr.ExpirationDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné'
+                             {aktCase}WHEN tr.ExpirationDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné'
                              WHEN DATEDIFF(day, CAST(SYSDATETIME() AS DATE), tr.ExpirationDate) <= 30 THEN 'Blíží se expirace'
                              ELSE 'Platné' END AS validityStatus
                     FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn
@@ -129,7 +144,7 @@ namespace HrApp.Api.Controllers
                     LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
                     LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
                     OUTER APPLY (
-                        SELECT TOP 1 1 AS HasCompleted, tr.CompletionDate, tr.ExpirationDate, tr.IsLegalOrExternal
+                        SELECT TOP 1 1 AS HasCompleted, tr.CompletionDate, tr.ExpirationDate, tr.IsLegalOrExternal{aktSelect}
                         FROM dbo.TRAINING_RECORDS tr
                         JOIN dbo.EMPLOYEES e_inner ON e_inner.ID = tr.EmployeeID
                         WHERE e_inner.PersonalNumber = u.BIS_Osobni_cislo AND tr.TrainingID = @tid
@@ -178,6 +193,108 @@ namespace HrApp.Api.Controllers
             {
                 _logger.LogError(ex, "[POST /api/trainings-v2] Error");
                 return StatusCode(500, new { success = false });
+            }
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> UpdateTraining(int id, [FromBody] NewTrainingPayload body)
+        {
+            if (string.IsNullOrWhiteSpace(body.Name) || body.CategoryId <= 0 || body.PeriodicityMonths < 0)
+                return BadRequest(new { success = false, message = "Chybí povinné údaje." });
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                await EnsureCatalogSchemaAsync(connection);
+
+                // Stávající perioda – pokud se změní, přepočítáme platnost u všech záznamů zaměstnanců.
+                var existing = await connection.QueryFirstOrDefaultAsync(
+                    "SELECT PeriodicityMonths FROM dbo.TRAININGS_CATALOG WHERE ID = @id", new { id });
+                if (existing == null)
+                    return NotFound(new { success = false, message = "Školení nebylo nalezeno v katalogu." });
+
+                int oldPeriod = (int)existing.PeriodicityMonths;
+
+                string sql = @"
+                    UPDATE dbo.TRAININGS_CATALOG
+                    SET CategoryID = @catId,
+                        Name = @name,
+                        Description = @desc,
+                        PeriodicityMonths = @period,
+                        IsLegal = @isLegal,
+                        IsExternal = @isExternal,
+                        TrainerName = @trainerName
+                    WHERE ID = @id";
+                await connection.ExecuteAsync(sql, new
+                {
+                    id,
+                    catId = body.CategoryId,
+                    name = body.Name.Trim(),
+                    desc = body.Description ?? "",
+                    period = body.PeriodicityMonths,
+                    isLegal = body.IsLegal,
+                    isExternal = body.IsExternal,
+                    trainerName = body.TrainerName?.Trim() ?? ""
+                });
+
+                // Změna periody → přepočet data platnosti u všech absolvovaných záznamů tohoto školení.
+                // Perioda 0 = jednorázové školení bez expirace (platnost = datum absolvování).
+                int recordsUpdated = 0;
+                if (oldPeriod != body.PeriodicityMonths)
+                {
+                    recordsUpdated = await connection.ExecuteAsync(@"
+                        UPDATE dbo.TRAINING_RECORDS
+                        SET ExpirationDate = CASE WHEN @period > 0
+                                                  THEN DATEADD(month, @period, CompletionDate)
+                                                  ELSE CompletionDate END
+                        WHERE TrainingID = @id",
+                        new { id, period = body.PeriodicityMonths });
+                }
+
+                return Ok(new { success = true, recordsUpdated });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[PUT /api/trainings-v2/{id}] Error");
+                return StatusCode(500, new { success = false, message = "Uložení změn se nezdařilo." });
+            }
+        }
+
+        // Smaže celé školení z katalogu VČETNĚ všech záznamů zaměstnanců. Nevratné.
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> DeleteTraining(int id)
+        {
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                // Nejdřív navázané záznamy (FK), pak katalogová položka.
+                await connection.ExecuteAsync("DELETE FROM dbo.TRAINING_RECORDS WHERE TrainingID = @id", new { id });
+                int affected = await connection.ExecuteAsync("DELETE FROM dbo.TRAININGS_CATALOG WHERE ID = @id", new { id });
+                if (affected == 0) return NotFound(new { success = false, message = "Školení nebylo nalezeno." });
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[DELETE /api/trainings-v2/{id}] Error");
+                return StatusCode(500, new { success = false, message = "Smazání školení se nezdařilo." });
+            }
+        }
+
+        // Smaže záznam(y) jednoho zaměstnance o tomto školení (např. přidané omylem). Nevratné.
+        [HttpDelete("{trainingId:int}/records/{employeeId:int}")]
+        public async Task<IActionResult> DeleteTrainingRecord(int trainingId, int employeeId)
+        {
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                int affected = await connection.ExecuteAsync(
+                    "DELETE FROM dbo.TRAINING_RECORDS WHERE TrainingID = @trainingId AND EmployeeID = @employeeId",
+                    new { trainingId, employeeId });
+                return Ok(new { success = true, deleted = affected });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[DELETE /api/trainings-v2/{trainingId}/records/{employeeId}] Error");
+                return StatusCode(500, new { success = false, message = "Smazání záznamu se nezdařilo." });
             }
         }
 
@@ -296,42 +413,67 @@ namespace HrApp.Api.Controllers
                 using var connection = _connectionFactory.CreateHrConnection();
                 await EnsureCatalogSchemaAsync(connection);
 
+                // Deaktivované školení (LegacyIsActive = 0) → stav "0" místo "Propadlé". Jen pokud sloupec existuje.
+                string aktInnerExp  = _hasLegacyActive ? "tr.LegacyIsActive AS LegacyIsActive," : "";
+                string aktCaseExp   = _hasLegacyActive ? "WHEN r.LegacyIsActive = 0 THEN '0'\n                            " : "";
+
+                // Jen školení, která zaměstnanec opravdu má ve svém profilu (existuje záznam v TRAINING_RECORDS).
+                // Pro každou kombinaci kategorie + název školení se bere jen nejnovější záznam – stejně jako v profilu.
+                // Stav přesně odpovídá profilu zaměstnance: Platné / Blíží se expirace / Propadlé / 0.
+                string umCostCol     = _hasUmCostDescCol ? ", Nakladove_Stredisko_Popis" : "";
+                string costDescExpr  = _hasUmCostDescCol
+                    ? "ISNULL(sp_cc.STREDISKO_POPIS, ISNULL(u.Nakladove_Stredisko_Popis, ISNULL(e.CostNumberDesc, '')))"
+                    : "ISNULL(sp_cc.STREDISKO_POPIS, ISNULL(e.CostNumberDesc, ''))";
+
                 string sql = $@"
+                    WITH ranked AS (
+                        SELECT
+                            e.PersonalNumber                            AS PersonalNumber,
+                            ISNULL(c.Name, 'Bez kategorie')             AS TrainingCategory,
+                            t.Name                                      AS TrainingName,
+                            t.PeriodicityMonths                         AS PeriodicityMonths,
+                            tr.CompletionDate                           AS CompletionDate,
+                            tr.ExpirationDate                           AS ExpirationDate,
+                            {aktInnerExp}
+                            ROW_NUMBER() OVER(
+                                PARTITION BY e.PersonalNumber, t.CategoryID, t.Name
+                                ORDER BY tr.CompletionDate DESC, tr.ID DESC
+                            )                                           AS rn
+                        FROM dbo.TRAINING_RECORDS tr
+                        JOIN dbo.TRAININGS_CATALOG t ON t.ID = tr.TrainingID
+                        LEFT JOIN dbo.TRAINING_CATEGORIES c ON c.ID = t.CategoryID
+                        JOIN dbo.EMPLOYEES e ON e.ID = tr.EmployeeID
+                    )
                     SELECT
-                        ISNULL(u.BIS_Osobni_cislo, '')              AS PersonalNumber,
-                        ISNULL(u.BIS_Prijmeni, '')                  AS LastName,
-                        ISNULL(u.BIS_Jmeno, '')                     AS FirstName,
-                        ISNULL(e.Category, '')                      AS EmployeeCategory,
+                        ISNULL(u.BIS_Osobni_cislo, '')                                      AS PersonalNumber,
+                        ISNULL(u.BIS_Prijmeni, '')                                          AS LastName,
+                        ISNULL(u.BIS_Jmeno, '')                                             AS FirstName,
+                        ISNULL(CAST(u.Kategorie AS VARCHAR), ISNULL(e.Category, ''))        AS EmployeeCategory,
                         ISNULL(CAST(u.Nakladove_Stredisko AS VARCHAR), ISNULL(e.CostNumber, '')) AS CostNumber,
-                        {(_hasUmCostDescCol ? "ISNULL(u.Nakladove_Stredisko_Popis, ISNULL(e.CostNumberDesc, ''))" : "ISNULL(e.CostNumberDesc, '')")} AS CostNumberDesc,
-                        ISNULL(c.Name, 'Bez kategorie')             AS TrainingCategory,
-                        t.Name                                      AS TrainingName,
-                        lr.CompletionDate                           AS CompletionDate,
-                        lr.ExpirationDate                           AS ExpirationDate,
-                        t.PeriodicityMonths                         AS PeriodicityMonths,
+                        {costDescExpr}                                                       AS CostNumberDesc,
+                        r.TrainingCategory                                                   AS TrainingCategory,
+                        r.TrainingName                                                       AS TrainingName,
+                        r.CompletionDate                                                     AS CompletionDate,
+                        r.ExpirationDate                                                     AS ExpirationDate,
+                        r.PeriodicityMonths                                                  AS PeriodicityMonths,
                         CASE
-                            WHEN lr.CompletionDate IS NULL THEN 'N'
-                            WHEN t.PeriodicityMonths = 0 THEN 'A'
-                            WHEN lr.ExpirationDate >= CAST(GETDATE() AS DATE) THEN 'A'
-                            ELSE 'N'
-                        END                                         AS IsValid
-                    FROM (
-                        SELECT *, ROW_NUMBER() OVER(PARTITION BY ISNULL(BIS_Osobni_cislo, CAST(ID AS NVARCHAR)) ORDER BY ID DESC) AS rn
+                            {aktCaseExp}WHEN r.PeriodicityMonths = 0 THEN 'Platné'
+                            WHEN r.ExpirationDate < CAST(GETDATE() AS DATE) THEN 'Propadlé'
+                            WHEN DATEDIFF(day, CAST(GETDATE() AS DATE), r.ExpirationDate) <= 30 THEN 'Blíží se expirace'
+                            ELSE 'Platné'
+                        END                                                                  AS Status
+                    FROM ranked r
+                    JOIN (
+                        SELECT ID, BIS_Osobni_cislo, BIS_Jmeno, BIS_Prijmeni, Kategorie, Nakladove_Stredisko{umCostCol},
+                               ROW_NUMBER() OVER(PARTITION BY ISNULL(BIS_Osobni_cislo, CAST(ID AS NVARCHAR)) ORDER BY ID DESC) AS urn
                         FROM USER_MANAGEMENT.dbo.USERS
                         WHERE BIS_Aktivni = 1
-                    ) u
+                    ) u ON u.BIS_Osobni_cislo = r.PersonalNumber AND u.urn = 1
                     LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
-                    CROSS JOIN dbo.TRAININGS_CATALOG t
-                    LEFT JOIN dbo.TRAINING_CATEGORIES c ON c.ID = t.CategoryID
-                    OUTER APPLY (
-                        SELECT TOP 1 tr.CompletionDate, tr.ExpirationDate
-                        FROM dbo.TRAINING_RECORDS tr
-                        JOIN HR.dbo.EMPLOYEES e2 ON e2.ID = tr.EmployeeID
-                        WHERE e2.PersonalNumber = u.BIS_Osobni_cislo AND tr.TrainingID = t.ID
-                        ORDER BY tr.CompletionDate DESC
-                    ) lr
-                    WHERE u.rn = 1
-                    ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno, c.Name, t.Name";
+                    LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc
+                        ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
+                    WHERE r.rn = 1
+                    ORDER BY u.BIS_Prijmeni, u.BIS_Jmeno, r.TrainingCategory, r.TrainingName";
 
                 var records = (await connection.QueryAsync(sql)).ToList();
 
@@ -342,7 +484,7 @@ namespace HrApp.Api.Controllers
                     "Os. číslo", "Příjmení", "Jméno", "Kategorie zaměstnance",
                     "Nákladové středisko číslo", "Nákladové středisko popis",
                     "Kategorie školení", "Název školení",
-                    "Datum absolvování", "Datum platné do", "Perioda (měs.)", "Platné"
+                    "Datum absolvování", "Datum platné do", "Perioda (měs.)", "Stav"
                 };
 
                 for (int i = 0; i < headers.Length; i++)
@@ -358,9 +500,22 @@ namespace HrApp.Api.Controllers
                 int row = 2;
                 foreach (var r in records)
                 {
-                    bool isValid = (string)r.IsValid == "A";
+                    string status = (string)r.Status;
 
-                    ws.Cell(row, 1).Value  = (string)(r.PersonalNumber ?? "");
+                    // Neaktivní školení ("0") se do hromadného exportu nezahrnují – jen platné/propadlé/blíží se expirace.
+                    if (status == "0") continue;
+
+                    // Osobní číslo zapíšeme jako číslo (ne text), pokud je to celé číslo.
+                    string pnStr = (string)(r.PersonalNumber ?? "");
+                    if (long.TryParse(pnStr, out var pnNum))
+                    {
+                        ws.Cell(row, 1).Value = pnNum;
+                        ws.Cell(row, 1).Style.NumberFormat.Format = "0";
+                    }
+                    else
+                    {
+                        ws.Cell(row, 1).Value = pnStr;
+                    }
                     ws.Cell(row, 2).Value  = (string)(r.LastName ?? "");
                     ws.Cell(row, 3).Value  = (string)(r.FirstName ?? "");
                     ws.Cell(row, 4).Value  = (string)(r.EmployeeCategory ?? "");
@@ -379,13 +534,20 @@ namespace HrApp.Api.Controllers
                     }
 
                     ws.Cell(row, 11).Value = (int)r.PeriodicityMonths == 0 ? "trvalé" : $"{r.PeriodicityMonths} měs.";
-                    ws.Cell(row, 12).Value = (string)r.IsValid;
+                    ws.Cell(row, 12).Value = status;
 
-                    // Červené pozadí pro neplatná / neabsolvovaná
-                    if (!isValid)
+                    // Zvýraznění podle stavu – stejné barvy jako v profilu zaměstnance.
+                    // Propadlé → červená, Blíží se expirace → oranžová, Platné/0 → bez zvýraznění.
+                    string? rowColor = status switch
+                    {
+                        "Propadlé"         => "#fff0f0",
+                        "Blíží se expirace" => "#fff8e6",
+                        _                   => null
+                    };
+                    if (rowColor != null)
                     {
                         var rowRange = ws.Range(row, 1, row, headers.Length);
-                        rowRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#fff0f0");
+                        rowRange.Style.Fill.BackgroundColor = XLColor.FromHtml(rowColor);
                     }
 
                     row++;
@@ -478,6 +640,46 @@ namespace HrApp.Api.Controllers
             }
         }
 
+        // Nastaví příznak aktivní/neaktivní (LegacyIsActive) u nejnovějšího záznamu školení
+        // pro každého zaměstnance. Neaktivní (0) → v profilu i katalogu se zobrazí šedá "0"
+        // místo platné/propadlé/blíží se expirace.
+        [HttpPut("records/set-active")]
+        public async Task<IActionResult> SetRecordsActive([FromBody] SetActivePayload body)
+        {
+            if (body.TrainingId <= 0 || body.PersonalNumbers == null || !body.PersonalNumbers.Any())
+                return BadRequest(new { success = false, message = "Chybí osobní čísla nebo ID školení." });
+
+            try
+            {
+                using var connection = _connectionFactory.CreateHrConnection();
+                await EnsureCatalogSchemaAsync(connection);
+
+                int updated = 0;
+                foreach (var pn in body.PersonalNumbers.Where(p => !string.IsNullOrWhiteSpace(p)))
+                {
+                    // Aktualizujeme jen nejnovější záznam (ten, který se zobrazuje v profilu i katalogu).
+                    updated += await connection.ExecuteAsync(@"
+                        UPDATE dbo.TRAINING_RECORDS
+                        SET LegacyIsActive = @active
+                        WHERE ID = (
+                            SELECT TOP 1 r.ID
+                            FROM dbo.TRAINING_RECORDS r
+                            JOIN dbo.EMPLOYEES e ON e.ID = r.EmployeeID
+                            WHERE e.PersonalNumber = @pn AND r.TrainingID = @tid
+                            ORDER BY r.CompletionDate DESC, r.ID DESC
+                        )",
+                        new { active = body.IsActive ? 1 : 0, pn = pn.Trim(), tid = body.TrainingId });
+                }
+
+                return Ok(new { success = true, updated });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[PUT /api/trainings-v2/records/set-active] Error");
+                return StatusCode(500, new { success = false, message = "Změna stavu školení se nezdařila." });
+            }
+        }
+
         [HttpGet("export")]
         public async Task<IActionResult> GetExport([FromQuery] string filter = "all", [FromQuery] string category = "Vše", [FromQuery] string? workcenter = null)
         {
@@ -567,6 +769,10 @@ namespace HrApp.Api.Controllers
                     : "ISNULL(e.CostNumberDesc, '')";
                 string detailCostDescExpr = $"ISNULL(sp_cc.STREDISKO_POPIS, {detailCostDescFallback})";
 
+                // Deaktivované školení (LegacyIsActive = 0) → stav "0" místo "Neplatné/Propadlé". Jen pokud sloupec existuje.
+                string aktSelect = _hasLegacyActive ? ", tr.LegacyIsActive" : "";
+                string aktCase = _hasLegacyActive ? "WHEN tr.LegacyIsActive = 0 THEN '0'\n                             " : "";
+
                 string sql = $@"
                     SELECT e.ID AS employeeId, ISNULL(u.BIS_Jmeno, '') AS firstName, ISNULL(u.BIS_Prijmeni, '') AS lastName,
                         ISNULL(u.BIS_Osobni_cislo, '') AS personalNumber, ISNULL(u.Oddeleni, '') AS department,
@@ -577,7 +783,7 @@ namespace HrApp.Api.Controllers
                         CAST(ISNULL(tr.HasCompleted, 0) AS BIT) AS hasCompleted, tr.CompletionDate AS completionDate,
                         tr.ExpirationDate AS expirationDate, CAST(ISNULL(tr.IsLegalOrExternal, 0) AS BIT) AS isLegalOrExternal,
                         CASE WHEN tr.HasCompleted IS NULL THEN 'Neproškolen'
-                             WHEN tr.ExpirationDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné'
+                             {aktCase}WHEN tr.ExpirationDate < CAST(SYSDATETIME() AS DATE) THEN 'Neplatné'
                              WHEN DATEDIFF(day, CAST(SYSDATETIME() AS DATE), tr.ExpirationDate) <= 30 THEN 'Blíží se expirace'
                              ELSE 'Platné' END AS validityStatus
                     FROM (SELECT *, ROW_NUMBER() OVER(PARTITION BY BIS_Osobni_cislo ORDER BY ID DESC) AS rn
@@ -585,7 +791,7 @@ namespace HrApp.Api.Controllers
                     LEFT JOIN HR.dbo.EMPLOYEES e ON e.PersonalNumber = u.BIS_Osobni_cislo
                     LEFT JOIN USER_MANAGEMENT.dbo.STREDISKO_POPIS sp_cc ON TRY_CONVERT(decimal(18,4), sp_cc.STREDISKO) = TRY_CONVERT(decimal(18,4), u.Nakladove_Stredisko)
                     OUTER APPLY (
-                        SELECT TOP 1 1 AS HasCompleted, tr.CompletionDate, tr.ExpirationDate, tr.IsLegalOrExternal
+                        SELECT TOP 1 1 AS HasCompleted, tr.CompletionDate, tr.ExpirationDate, tr.IsLegalOrExternal{aktSelect}
                         FROM dbo.TRAINING_RECORDS tr
                         JOIN dbo.EMPLOYEES e_inner ON e_inner.ID = tr.EmployeeID
                         WHERE e_inner.PersonalNumber = u.BIS_Osobni_cislo AND tr.TrainingID = @tid
@@ -663,6 +869,13 @@ namespace HrApp.Api.Controllers
         public bool IsLegal { get; set; }
         public bool IsExternal { get; set; }
         public string? TrainerName { get; set; }
+    }
+
+    public class SetActivePayload
+    {
+        public int TrainingId { get; set; }
+        public List<string>? PersonalNumbers { get; set; }
+        public bool IsActive { get; set; }
     }
 
     public class NewRecordPayload

@@ -17,7 +17,7 @@ interface EmployeeStatus {
     hasCompleted: boolean;
     completionDate: string | null;
     expirationDate: string | null;
-    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace';
+    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace' | '0';
     isLegalOrExternal: boolean;
     hiringDate: string | null;
 }

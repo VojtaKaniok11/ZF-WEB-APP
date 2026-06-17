@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, Check, FileText } from "lucide-react";
+import { X, Plus, AlertTriangle, CheckCircle, Clock, Search, Filter, Download, Building2, Check, FileText, Pencil, Trash2 } from "lucide-react";
 import * as xlsx from "xlsx";
 import { TrainingV2 } from "./TrainingsClientV2";
 import AddTrainingRecordModalV2 from "./AddTrainingRecordModalV2";
+import EditTrainingModalV2 from "./EditTrainingModalV2";
 import AttendanceSheetModalV2 from "./AttendanceSheetModalV2";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import { getApiUrl } from "@/lib/constants";
 
 interface EmployeeStatus {
@@ -21,7 +23,7 @@ interface EmployeeStatus {
     hasCompleted: boolean;
     completionDate: string | null;
     expirationDate: string | null;
-    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace';
+    validityStatus: 'Platné' | 'Neplatné' | 'Blíží se expirace' | '0';
     isLegalOrExternal: boolean;
     hiringDate: string | null;
 }
@@ -29,18 +31,25 @@ interface EmployeeStatus {
 interface Props {
     trainingId: number | null;
     onClose: () => void;
+    onUpdated?: () => void;
 }
 
-export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
+export default function TrainingDetailModalV2({ trainingId, onClose, onUpdated }: Props) {
     const [training, setTraining] = useState<TrainingV2 | null>(null);
     const [employees, setEmployees] = useState<EmployeeStatus[]>([]);
     const [loading, setLoading] = useState(false);
 
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
     const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+    const [confirmDeleteType, setConfirmDeleteType] = useState(false);
+    const [recordToDelete, setRecordToDelete] = useState<EmployeeStatus | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
-    const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace">("Vše");
+    const [filterStatus, setFilterStatus] = useState<"Vše" | "Platné" | "Neplatné" | "Blíží se expirace" | "0">("Vše");
+    const [selectedPns, setSelectedPns] = useState<Set<string>>(new Set());
+    const [togglingActive, setTogglingActive] = useState(false);
     const [selectedWorkcenters, setSelectedWorkcenters] = useState<Set<string>>(new Set());
     const [isWorkcenterDropdownOpen, setIsWorkcenterDropdownOpen] = useState(false);
     const workcenterDropdownRef = useRef<HTMLDivElement>(null);
@@ -83,6 +92,7 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
         setSearchQuery("");
         setFilterStatus("Vše");
         setSelectedWorkcenters(new Set());
+        setSelectedPns(new Set());
         if (trainingId) {
             loadDetail();
         } else {
@@ -114,6 +124,72 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
         filteredEmployees = filteredEmployees.filter(emp => selectedWorkcenters.has((emp.workcenter || "").trim()));
     }
 
+    const togglePn = (pn: string) => {
+        setSelectedPns(prev => {
+            const next = new Set(prev);
+            if (next.has(pn)) next.delete(pn); else next.add(pn);
+            return next;
+        });
+    };
+
+    const handleSetActive = async (isActive: boolean) => {
+        const pns = Array.from(selectedPns).filter(Boolean);
+        if (pns.length === 0 || !trainingId) return;
+        setTogglingActive(true);
+        try {
+            const res = await fetch(`${getApiUrl()}/trainings-v2/records/set-active`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ trainingId, personalNumbers: pns, isActive }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSelectedPns(new Set());
+                loadDetail();
+                onUpdated?.();
+            }
+        } catch (err) {
+            console.error("Set active error:", err);
+        } finally {
+            setTogglingActive(false);
+        }
+    };
+
+    const handleDeleteTraining = async () => {
+        if (!trainingId) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`${getApiUrl()}/trainings-v2/${trainingId}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setConfirmDeleteType(false);
+                onUpdated?.();
+                onClose();
+            }
+        } catch (err) {
+            console.error("Delete training error:", err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const handleDeleteRecord = async () => {
+        if (!trainingId || !recordToDelete) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`${getApiUrl()}/trainings-v2/${trainingId}/records/${recordToDelete.employeeId}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setRecordToDelete(null);
+                loadDetail();
+            }
+        } catch (err) {
+            console.error("Delete record error:", err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const handleExportExcel = () => {
         if (filteredEmployees.length === 0) return;
 
@@ -131,7 +207,7 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
             'Datum absolvování': fmt(emp.completionDate),
             'Datum platné do': fmt(emp.expirationDate),
             'Perioda (měsíce)': training?.periodicityMonths ?? '',
-            'Platné': emp.validityStatus === 'Platné' ? 'A' : 'N',
+            'Platné': emp.validityStatus === '0' ? '0' : (emp.validityStatus === 'Platné' ? 'A' : 'N'),
         }));
 
         const ws = xlsx.utils.json_to_sheet(data);
@@ -177,19 +253,37 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                                     {training?.name}
                                 </h2>
                                 <div className="text-blue-200 mt-1 text-sm flex gap-4 font-medium">
-                                    <span>Školitel: <strong className="text-white font-semibold">Autorizovaný lektor ZF</strong></span>
-                                    <span>Perioda: <strong className="text-white font-semibold">{training?.periodicityMonths} měsíců</strong></span>
+                                    <span>Školitel: <strong className="text-white font-semibold">{training?.trainerName?.trim() || "—"}</strong></span>
+                                    <span>Perioda: <strong className="text-white font-semibold">{training?.periodicityMonths === 0 ? "jednorázové" : `${training?.periodicityMonths} měsíců`}</strong></span>
                                 </div>
                             </>
                         )}
                     </div>
 
-                    <button
-                        onClick={onClose}
-                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            disabled={loading || !training}
+                            className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/20 disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Pencil size={15} />
+                            Upravit
+                        </button>
+                        <button
+                            onClick={() => setConfirmDeleteType(true)}
+                            disabled={loading || !training}
+                            className="inline-flex items-center gap-2 rounded-lg bg-red-500/90 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Trash2 size={15} />
+                            Smazat
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Toolbar */}
@@ -259,6 +353,7 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                                     <option value="Platné">Platné</option>
                                     <option value="Neplatné">Propadlé</option>
                                     <option value="Blíží se expirace">Blíží se expirace</option>
+                                    <option value="0">Neaktivní (0)</option>
                                 </select>
                                 <div ref={workcenterDropdownRef} className="relative flex items-center gap-2">
                                     <Building2 size={15} className="text-gray-400" />
@@ -298,6 +393,39 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                             </div>
                         </div>
                     )}
+
+                    {/* Hromadná akce: aktivace / deaktivace vybraných */}
+                    {!loading && selectedPns.size > 0 && (
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+                            <span className="text-sm font-medium text-blue-800">
+                                Vybráno {selectedPns.size} {selectedPns.size === 1 ? "zaměstnanec" : selectedPns.size <= 4 ? "zaměstnanci" : "zaměstnanců"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => handleSetActive(true)}
+                                    disabled={togglingActive}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
+                                >
+                                    <CheckCircle size={15} />
+                                    Nastavit aktivní
+                                </button>
+                                <button
+                                    onClick={() => handleSetActive(false)}
+                                    disabled={togglingActive}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-gray-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-700 active:scale-95 disabled:opacity-50"
+                                >
+                                    Deaktivovat (0)
+                                </button>
+                                <button
+                                    onClick={() => setSelectedPns(new Set())}
+                                    disabled={togglingActive}
+                                    className="rounded-lg px-2.5 py-2 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 disabled:opacity-50"
+                                >
+                                    Zrušit výběr
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Data Table */}
@@ -313,6 +441,23 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                             <table className="w-full text-left border-collapse min-w-[700px]">
                                 <thead>
                                     <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        <th className="px-4 py-4 w-10">
+                                            <input
+                                                type="checkbox"
+                                                className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                checked={filteredEmployees.length > 0 && filteredEmployees.every(e => selectedPns.has(e.personalNumber))}
+                                                ref={el => { if (el) el.indeterminate = filteredEmployees.some(e => selectedPns.has(e.personalNumber)) && !filteredEmployees.every(e => selectedPns.has(e.personalNumber)); }}
+                                                onChange={(e) => {
+                                                    const pns = filteredEmployees.map(emp => emp.personalNumber).filter(Boolean);
+                                                    setSelectedPns(prev => {
+                                                        const next = new Set(prev);
+                                                        if (e.target.checked) pns.forEach(pn => next.add(pn));
+                                                        else pns.forEach(pn => next.delete(pn));
+                                                        return next;
+                                                    });
+                                                }}
+                                            />
+                                        </th>
                                         <th className="px-4 py-4">Os. číslo</th>
                                         <th className="px-4 py-4">Příjmení</th>
                                         <th className="px-4 py-4">Jméno</th>
@@ -321,11 +466,21 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                                         <th className="px-4 py-4">Absolvováno</th>
                                         <th className="px-4 py-4">Platnost do</th>
                                         <th className="px-4 py-4 text-right">Status</th>
+                                        <th className="px-4 py-4 text-right">Akce</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredEmployees.map((emp) => (
-                                        <tr key={emp.personalNumber} className="transition-colors hover:bg-blue-50/40">
+                                        <tr key={emp.personalNumber} className={`transition-colors hover:bg-blue-50/40 ${selectedPns.has(emp.personalNumber) ? "bg-blue-50/60" : ""}`}>
+                                            <td className="px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                    checked={selectedPns.has(emp.personalNumber)}
+                                                    disabled={!emp.personalNumber}
+                                                    onChange={() => togglePn(emp.personalNumber)}
+                                                />
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono font-semibold text-blue-700">
                                                     {emp.personalNumber || '—'}
@@ -352,11 +507,20 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                                             <td className="px-4 py-3 text-right">
                                                 <StatusBadge status={emp.validityStatus} />
                                             </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button
+                                                    onClick={() => setRecordToDelete(emp)}
+                                                    title="Smazat záznam zaměstnance"
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                     {filteredEmployees.length === 0 && (
                                         <tr>
-                                            <td colSpan={8} className="py-12 text-center text-sm text-gray-400">
+                                            <td colSpan={10} className="py-12 text-center text-sm text-gray-400">
                                                 Nenalezeny žádné záznamy pro dané filtry.
                                             </td>
                                         </tr>
@@ -390,6 +554,50 @@ export default function TrainingDetailModalV2({ trainingId, onClose }: Props) {
                     onClose={() => setShowAttendanceModal(false)}
                 />
             )}
+
+            {showEditModal && training && (
+                <EditTrainingModalV2
+                    training={training}
+                    onClose={() => setShowEditModal(false)}
+                    onSaved={() => {
+                        setShowEditModal(false);
+                        loadDetail();
+                        onUpdated?.();
+                    }}
+                />
+            )}
+
+            {confirmDeleteType && (
+                <ConfirmDeleteModal
+                    title="Smazat celé školení?"
+                    message={
+                        <>
+                            Opravdu chcete smazat školení <strong>{training?.name}</strong> z katalogu?
+                            Smaže se i <strong>{employees.length}</strong> {employees.length === 1 ? "záznam" : employees.length <= 4 ? "záznamy" : "záznamů"} zaměstnanců s tímto školením.
+                        </>
+                    }
+                    confirmLabel="Smazat školení"
+                    loading={deleting}
+                    onConfirm={handleDeleteTraining}
+                    onCancel={() => setConfirmDeleteType(false)}
+                />
+            )}
+
+            {recordToDelete && (
+                <ConfirmDeleteModal
+                    title="Smazat záznam zaměstnance?"
+                    message={
+                        <>
+                            Opravdu smazat záznam o tomto školení u <strong>{recordToDelete.firstName} {recordToDelete.lastName}</strong>
+                            {recordToDelete.personalNumber ? ` (${recordToDelete.personalNumber})` : ""}?
+                        </>
+                    }
+                    confirmLabel="Smazat záznam"
+                    loading={deleting}
+                    onConfirm={handleDeleteRecord}
+                    onCancel={() => setRecordToDelete(null)}
+                />
+            )}
         </div>
     );
 }
@@ -413,6 +621,14 @@ function StatusBadge({ status }: { status: string }) {
         return (
             <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
                 <Clock size={14} /> Expiruje
+            </span>
+        );
+    }
+    // Absolvované, ale v DB deaktivované (Akt_skol = 0) – není propadlé, jen neaktivní
+    if (status === '0') {
+        return (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/20">
+                0
             </span>
         );
     }

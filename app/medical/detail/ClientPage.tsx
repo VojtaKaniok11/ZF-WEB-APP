@@ -8,6 +8,7 @@ import ExpirationBadge from "@/components/ExpirationBadge";
 import type { EmployeeDetail } from "@/types/employee";
 import { getApiUrl } from "@/lib/constants";
 import DetailTabs from "@/components/DetailTabs";
+import { medicalResultClass } from "@/lib/medical";
 
 interface MedicalRecord {
     examTypeName: string;
@@ -129,9 +130,7 @@ export default function MedicalDetailPage() {
                                         <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.examDate)}</td>
                                         <td className="px-5 py-3 tabular-nums text-gray-600">{formatDate(r.nextExamDate)}</td>
                                         <td className="px-5 py-3">
-                                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${r.result === "Způsobilý" ? "bg-emerald-50 text-emerald-700" :
-                                                r.result === "Způsobilý s omezením" ? "bg-amber-50 text-amber-700" :
-                                                    "bg-red-50 text-red-700"}`}>
+                                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${medicalResultClass(r.result)}`}>
                                                 {r.result}
                                             </span>
                                         </td>
