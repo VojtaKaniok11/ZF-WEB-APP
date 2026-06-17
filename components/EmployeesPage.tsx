@@ -107,7 +107,7 @@ export default function EmployeesPage({ initialEmployees = [] }: EmployeesPagePr
                 "Jméno":                       emp.firstName ?? "",
                 "Kategorie":                   emp.category ?? "",
                 "Kmen. středisko číslo":       emp.workcenter ?? "",
-                "Kmen. středisko popis":       emp.department ?? "",
+                "Kmen. středisko popis":       emp.workcenterName ?? "",
                 "Nákladové číslo":             emp.costNumber ?? "",
                 "Nákladové středisko popis":   emp.costNumberDesc ?? "",
                 "Stav":                        emp.isActive ? "Aktivní" : "Neaktivní",
